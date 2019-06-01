@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+	<PreferenceCategory android:title="@string/conn_dest">
+		<EditTextPreference android:key="host"
+			android:summary="@string/host_summary"
+			android:title="@string/host" />
+		<EditTextPreference android:title="@string/port"
+			android:summary="@string/port_summary"
+			android:key="port" android:defaultValue="22" />
+		<EditTextPreference android:key="username"
+			android:summary="@string/username_summary"
+			android:title="@string/username" />
+	</PreferenceCategory>
+	<PreferenceCategory android:title="@string/auth">
+		<EditTextPreference android:title="@string/passwd"
+			android:summary="@string/passwd_summary"
+			android:key="passwd" />
+	</PreferenceCategory>
+</PreferenceScreen>

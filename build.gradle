@@ -1,0 +1,41 @@
+buildscript {
+	repositories {
+		google()
+		jcenter()
+		maven {
+			url 'https://oss.jfrog.org/artifactory/oss-snapshot-local/'
+		}
+	}
+	dependencies {
+		classpath 'com.android.tools.build:gradle:3.4.1'
+	}
+}
+apply plugin: 'com.android.application'
+
+android {
+	compileSdkVersion 'android-28'
+	buildToolsVersion '28.0.3'
+
+	defaultConfig {
+		minSdkVersion 19
+		targetSdkVersion 28
+	}
+
+	buildTypes {
+		release {
+			minifyEnabled false
+			proguardFile getDefaultProguardFile('proguard-android.txt')
+		}
+	}
+}
+
+dependencies {
+	implementation "org.connectbot:sshlib:2.2.9"
+}
+
+allprojects {
+	repositories {
+		google()
+		jcenter()
+	}
+}

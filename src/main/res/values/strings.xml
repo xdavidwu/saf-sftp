@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="app_name">SAF SFTP</string>
+	<string name="conn_dest">Connection Destination</string>
+	<string name="host">Host</string>
+	<string name="host_summary">Host to connect.</string>
+	<string name="port">Port</string>
+	<string name="port_summary">Port to connect.</string>
+	<string name="username">Username</string>
+	<string name="username_summary">Username to connect.</string>
+	<string name="auth">Authentication Details</string>
+	<string name="passwd">Password</string>
+	<string name="passwd_summary">Password.</string>
+	<string name="passwd_filled">(filled)</string>
+</resources>
