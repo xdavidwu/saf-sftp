@@ -20,6 +20,7 @@ import com.trilead.ssh2.Connection;
 import com.trilead.ssh2.SFTPv3Client;
 import com.trilead.ssh2.SFTPv3DirectoryEntry;
 import com.trilead.ssh2.SFTPv3FileAttributes;
+import com.trilead.ssh2.SFTPv3FileHandle;
 
 import java.io.IOException;
 import java.util.Vector;
@@ -28,7 +29,9 @@ import org.safsftp.ToastThread;
 import org.safsftp.ReadTask;
 
 public class SFTPDocumentsProvider extends DocumentsProvider {
-
+	private Connection connection;
+	private SFTPv3Client sftp;
+	private String host=null,port=null; //TODO: multiple server support
 	private ToastThread lthread;
 	
 	private static final String[] DEFAULT_ROOT_PROJECTION=new String[]{
@@ -58,51 +61,21 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		return "application/octet-stream";
 	}
 
-	@Override
-	public boolean onCreate() {
-		lthread=new ToastThread(getContext());
-		lthread.start();
-		return true;
-	}
-
-	public ParcelFileDescriptor openDocument(String documentId,
-			String mode,CancellationSignal cancellationSignal) {
-		if (!"r".equals(mode)) {
-			throw new UnsupportedOperationException("Mode "+mode+" is not supported yet.");
-		}
-		SharedPreferences settings=PreferenceManager
-			.getDefaultSharedPreferences(getContext());
-		String host=documentId.substring(0,documentId.indexOf(":"));
-		String tmp=documentId.substring(0,documentId.indexOf("/"));
-		String port=tmp.substring(tmp.indexOf(":")+1);
-		String filename=documentId.substring(documentId.indexOf("/")+1);
-		Log.e("SFTP","od "+documentId+" on "+host+":"+port);
-		ParcelFileDescriptor[] fd;
+	private boolean retriveConnection() {
 		try {
-			fd=ParcelFileDescriptor.createReliablePipe();
+			connection.ping();
+			return true;
 		}
-		catch(IOException e) {
-			return null;
+		catch(Exception e){
 		}
-		new ReadTask(host,port,settings.getString("username",""),
-				settings.getString("passwd",""),
-				filename,fd[1],lthread).execute();
-		Log.e("SFTP","od "+documentId+" on "+host+":"+port+" return");
-		return fd[0];
-	}
-
-	public Cursor queryChildDocuments(String parentDocumentId,
-			String[] projection,String sortOrder) {
-		MatrixCursor result=new MatrixCursor(projection!=null?projection:DEFAULT_DOC_PROJECTION);
-		SharedPreferences settings=PreferenceManager
-			.getDefaultSharedPreferences(getContext());
-		Connection connection=null;
-		SFTPv3Client sftp=null;
-		String host=parentDocumentId.substring(0,parentDocumentId.indexOf(":"));
-		String tmp=parentDocumentId.substring(0,parentDocumentId.indexOf("/"));
-		String port=tmp.substring(tmp.indexOf(":")+1);
-		Log.e("SFTP","qcf "+parentDocumentId+" on "+host+":"+port);
+		Log.v("SFTP","connect "+host+":"+port);
 		try {
+			SharedPreferences settings=PreferenceManager
+				.getDefaultSharedPreferences(getContext());
+			if(host==null||port==null){
+				host=settings.getString("host","");
+				port=settings.getString("port","22");
+			}
 			connection=new Connection(host,Integer.parseInt(port));
 			connection.connect(null,10000,10000);
 			if(!connection.authenticateWithPassword(settings.getString("username",""),
@@ -123,13 +96,58 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			lthread.handler.sendMessage(msg);
 			sftp.close();
 			connection.close();
+			return false;
+		}
+		return true;
+	}
+
+	@Override
+	public boolean onCreate() {
+		lthread=new ToastThread(getContext());
+		lthread.start();
+		return true;
+	}
+
+	public ParcelFileDescriptor openDocument(String documentId,
+			String mode,CancellationSignal cancellationSignal) {
+		if (!"r".equals(mode)) {
+			throw new UnsupportedOperationException("Mode "+mode+" is not supported yet.");
+		}
+		if(!retriveConnection()){
+			//TODO notify error
+			return null;
+		}
+		String filename=documentId.substring(documentId.indexOf("/")+1);
+		Log.v("SFTP","od "+documentId+" on "+host+":"+port);
+		ParcelFileDescriptor[] fd;
+		SFTPv3FileHandle file;
+		try {
+			fd=ParcelFileDescriptor.createReliablePipe();
+			file=sftp.openFileRO(filename);
+		}
+		catch(IOException e) {
+			//TODO notify error
+			Log.e("SFTP","read file "+filename+" init "+e.toString());
+			return null;
+		}
+		new ReadTask(sftp,file,fd[1]).execute();
+		Log.v("SFTP","od "+documentId+" on "+host+":"+port+" return");
+		return fd[0];
+	}
+
+	public Cursor queryChildDocuments(String parentDocumentId,
+			String[] projection,String sortOrder) {
+		MatrixCursor result=new MatrixCursor(projection!=null?projection:DEFAULT_DOC_PROJECTION);
+		Log.v("SFTP","qcf "+parentDocumentId+" on "+host+":"+port);
+		if(!retriveConnection()){
+			//TODO notify error
 			return result;
 		}
 		String filename=parentDocumentId.substring(parentDocumentId.indexOf("/")+1);
 		try{
 			Vector<SFTPv3DirectoryEntry> res=sftp.ls(filename);
 			for(SFTPv3DirectoryEntry entry : res){
-				Log.e("SFTP","qcf "+parentDocumentId+" "+entry.filename+" "+entry.attributes.size+" "+entry.attributes.mtime);
+				Log.v("SFTP","qcf "+parentDocumentId+" "+entry.filename+" "+entry.attributes.size+" "+entry.attributes.mtime);
 				if(entry.filename.equals(".")||entry.filename.equals(".."))continue;
 				MatrixCursor.RowBuilder row=result.newRow();
 				row.add(Document.COLUMN_DOCUMENT_ID,parentDocumentId+'/'+entry.filename);
@@ -145,47 +163,19 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			}
 		}
 		catch(Exception e){
-		Log.e("SFTP","qcf "+parentDocumentId+" "+e.toString());
+			Log.e("SFTP","qcf "+parentDocumentId+" "+e.toString());
 			Message msg=lthread.handler.obtainMessage();
 			msg.obj=e.toString();
 			lthread.handler.sendMessage(msg);
 		}
-		sftp.close();
-		connection.close();
 		return result;
 	}
 
 	public Cursor queryDocument(String documentId, String[] projection) {
 		MatrixCursor result=new MatrixCursor(projection!=null?projection:DEFAULT_DOC_PROJECTION);
-		SharedPreferences settings=PreferenceManager
-			.getDefaultSharedPreferences(getContext());
-		Connection connection=null;
-		SFTPv3Client sftp=null;
-		String host=documentId.substring(0,documentId.indexOf(":"));
-		String tmp=documentId.substring(0,documentId.indexOf("/"));
-		String port=tmp.substring(tmp.indexOf(":")+1);
-		Log.e("SFTP","qf "+documentId+" on "+host+":"+port);
-		try {
-			connection=new Connection(host,Integer.parseInt(port));
-			connection.connect(null,10000,10000);
-			if(!connection.authenticateWithPassword(settings.getString("username",""),
-				settings.getString("passwd",""))){
-				Message msg=lthread.handler.obtainMessage();
-				msg.obj="SFTP auth failed.";
-				lthread.handler.sendMessage(msg);
-			}
-			sftp=new SFTPv3Client(connection);
-			sftp.setCharset(null);
-			Message msg=lthread.handler.obtainMessage();
-			msg.obj="SFTP connect succeed.";
-			lthread.handler.sendMessage(msg);
-		}
-		catch(Exception e){
-			Message msg=lthread.handler.obtainMessage();
-			msg.obj=e.toString();
-			lthread.handler.sendMessage(msg);
-			sftp.close();
-			connection.close();
+		Log.v("SFTP","qf "+documentId+" on "+host+":"+port);
+		if(!retriveConnection()){
+			//TODO notify error
 			return result;
 		}
 		String filename=documentId.substring(documentId.indexOf("/")+1);
@@ -199,13 +189,11 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			row.add(Document.COLUMN_LAST_MODIFIED,res.mtime*1000);
 		}
 		catch(Exception e){
-		Log.e("SFTP","qf "+documentId+" "+e.toString());
+			Log.e("SFTP","qf "+documentId+" "+e.toString());
 			Message msg=lthread.handler.obtainMessage();
 			msg.obj=e.toString();
 			lthread.handler.sendMessage(msg);
 		}
-		sftp.close();
-		connection.close();
 		return result;
 	}
 
@@ -213,7 +201,8 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		MatrixCursor result=new MatrixCursor(projection!=null?projection:DEFAULT_ROOT_PROJECTION);
 		SharedPreferences settings=PreferenceManager
 			.getDefaultSharedPreferences(getContext());
-		String host=settings.getString("host",""),port=settings.getString("port","22");
+		host=settings.getString("host","");
+		port=settings.getString("port","22");
 		MatrixCursor.RowBuilder row=result.newRow();
 		row.add(Root.COLUMN_ROOT_ID,host+":"+port);
 		row.add(Root.COLUMN_DOCUMENT_ID,host+":"+port+"/.");

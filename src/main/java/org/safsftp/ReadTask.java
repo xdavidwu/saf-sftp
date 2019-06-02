@@ -13,37 +13,14 @@ import com.trilead.ssh2.SFTPv3FileHandle;
 import org.safsftp.ToastThread;
 
 public class ReadTask extends AsyncTask<Void,Void,Void> {
-	private Connection connection;
 	private SFTPv3Client sftp;
 	private SFTPv3FileHandle file;
-	private ToastThread lthread;
 	private ParcelFileDescriptor fd;
 
-	public ReadTask(String host,String port,String username,String passwd,
-			String filename,ParcelFileDescriptor fd,ToastThread lthread) {
+	public ReadTask(SFTPv3Client sftp,SFTPv3FileHandle file,ParcelFileDescriptor fd) {
 		this.fd=fd;
-		try {
-			connection=new Connection(host,Integer.parseInt(port));
-			connection.connect(null,10000,10000);
-			if(!connection.authenticateWithPassword(username,passwd)){
-				Message msg=lthread.handler.obtainMessage();
-				msg.obj="SFTP auth failed.";
-				lthread.handler.sendMessage(msg);
-			}
-			sftp=new SFTPv3Client(connection);
-			sftp.setCharset(null);
-			Message msg=lthread.handler.obtainMessage();
-			msg.obj="SFTP connect succeed.";
-			lthread.handler.sendMessage(msg);
-			file=sftp.openFileRO(filename);
-		}
-		catch(Exception e){
-			Message msg=lthread.handler.obtainMessage();
-			msg.obj=e.toString();
-			lthread.handler.sendMessage(msg);
-			sftp.close();
-			connection.close();
-		}
+		this.sftp=sftp;
+		this.file=file;
 	}
 
 	@Override
@@ -57,14 +34,10 @@ public class ReadTask extends AsyncTask<Void,Void,Void> {
 				offset+=size;
 			}
 			sftp.closeFile(file);
-			sftp.close();
-			connection.close();
 			acos.close();
 		}
 		catch(Exception e){
 			Log.e("SFTP","read file "+e.toString());
-			sftp.close();
-			connection.close();
 		}
 		return null;
 	}
