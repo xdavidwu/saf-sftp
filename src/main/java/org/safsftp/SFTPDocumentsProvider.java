@@ -211,6 +211,13 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 	}
 
 	public Cursor queryRoots(String[] projection) {
+		try {
+			connection.ping();
+			sftp.close();
+			connection.close();
+		}
+		catch(Exception e){
+		}
 		MatrixCursor result=new MatrixCursor(projection!=null?projection:DEFAULT_ROOT_PROJECTION);
 		SharedPreferences settings=PreferenceManager
 			.getDefaultSharedPreferences(getContext());
