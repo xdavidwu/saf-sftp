@@ -27,9 +27,17 @@ public class MainActivity extends PreferenceActivity
 		usernameText=(EditTextPreference)findPreference("username");
 		passwdText=(EditTextPreference)findPreference("passwd");
 
-		getPreferenceScreen().getSharedPreferences()
-			.registerOnSharedPreferenceChangeListener(this);
-	}
+		SharedPreferences settings=getPreferenceScreen().getSharedPreferences();
+		settings.registerOnSharedPreferenceChangeListener(this);
+		if (!settings.getString("host", "").equals(""))
+			hostText.setSummary(settings.getString("host", ""));
+		if (!settings.getString("port", "").equals(""))
+			portText.setSummary(settings.getString("port", ""));
+		if (!settings.getString("username", "").equals(""))
+			usernameText.setSummary(settings.getString("username", ""));
+		if (!settings.getString("passwd", "").equals(""))
+			passwdText.setSummary(getString(R.string.passwd_filled));
+}
 
 	@Override
 	public void onSharedPreferenceChanged(SharedPreferences settings,
