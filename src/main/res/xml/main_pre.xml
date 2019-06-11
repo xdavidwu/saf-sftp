@@ -6,6 +6,7 @@
 			android:title="@string/host" />
 		<EditTextPreference android:title="@string/port"
 			android:summary="@string/port_summary"
+			android:inputType="numberDecimal"
 			android:key="port" android:defaultValue="22" />
 		<EditTextPreference android:key="username"
 			android:summary="@string/username_summary"
@@ -14,6 +15,7 @@
 	<PreferenceCategory android:title="@string/auth">
 		<EditTextPreference android:title="@string/passwd"
 			android:summary="@string/passwd_summary"
+			android:inputType="textPassword"
 			android:key="passwd" />
 	</PreferenceCategory>
 </PreferenceScreen>
