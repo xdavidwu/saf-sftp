@@ -8,6 +8,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.ParcelFileDescriptor;
+import android.os.StrictMode;
 import android.preference.PreferenceManager;
 import android.provider.DocumentsContract.Document;
 import android.provider.DocumentsContract.Root;
@@ -91,6 +92,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			lthread.handler.sendMessage(msg);
 		}
 		catch(Exception e){
+			Log.e("SFTP","connect "+e.toString());
 			Message msg=lthread.handler.obtainMessage();
 			msg.obj=e.toString();
 			lthread.handler.sendMessage(msg);
@@ -99,6 +101,14 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			return false;
 		}
 		return true;
+	}
+
+	private void editPolicyIfMainThread(){
+		//FIXME
+		//if(Looper.getMainLooper()==Looper.myLooper()){
+		//	Log.w("SFTP","We're on main thread.");
+			StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.LAX);
+		//}
 	}
 
 	@Override
@@ -113,6 +123,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		if (!"r".equals(mode)) {
 			throw new UnsupportedOperationException("Mode "+mode+" is not supported yet.");
 		}
+		editPolicyIfMainThread();
 		if(!retriveConnection()){
 			//TODO notify error
 			return null;
@@ -139,6 +150,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			String[] projection,String sortOrder) {
 		MatrixCursor result=new MatrixCursor(projection!=null?projection:DEFAULT_DOC_PROJECTION);
 		Log.v("SFTP","qcf "+parentDocumentId+" on "+host+":"+port);
+		editPolicyIfMainThread();
 		if(!retriveConnection()){
 			//TODO notify error
 			return result;
@@ -174,6 +186,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 	public Cursor queryDocument(String documentId, String[] projection) {
 		MatrixCursor result=new MatrixCursor(projection!=null?projection:DEFAULT_DOC_PROJECTION);
 		Log.v("SFTP","qf "+documentId+" on "+host+":"+port);
+		editPolicyIfMainThread();
 		if(!retriveConnection()){
 			//TODO notify error
 			return result;
