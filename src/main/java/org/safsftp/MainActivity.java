@@ -2,14 +2,20 @@ package org.safsftp;
 
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
+import android.net.Uri;
 import android.preference.EditTextPreference;
 import android.preference.PreferenceActivity;
+import android.provider.DocumentsContract;
 import android.os.Bundle;
 
 public class MainActivity extends PreferenceActivity
 	implements OnSharedPreferenceChangeListener {
-
 	private EditTextPreference hostText, portText, usernameText, passwdText;
+
+	private void notifyRootChanges(){
+		Uri uri=DocumentsContract.buildRootsUri("org.safsftp");
+		getContentResolver().notifyChange(uri,null);
+	}
 	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -28,6 +34,7 @@ public class MainActivity extends PreferenceActivity
 	@Override
 	public void onSharedPreferenceChanged(SharedPreferences settings,
 			String key) {
+		notifyRootChanges();
 		switch(key){
 		case "host":
 			if (settings.getString("host", "").equals(""))
