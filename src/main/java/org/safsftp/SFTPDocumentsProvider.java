@@ -223,9 +223,11 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			.getDefaultSharedPreferences(getContext());
 		host=settings.getString("host","");
 		port=settings.getString("port","22");
+		String mountpoint=settings.getString("mountpoint",".");
+		if(mountpoint.equals(""))mountpoint=".";
 		MatrixCursor.RowBuilder row=result.newRow();
 		row.add(Root.COLUMN_ROOT_ID,host+":"+port);
-		row.add(Root.COLUMN_DOCUMENT_ID,host+":"+port+"/.");
+		row.add(Root.COLUMN_DOCUMENT_ID,host+":"+port+"/"+mountpoint);
 		row.add(Root.COLUMN_FLAGS,0);
 		row.add(Root.COLUMN_TITLE,"SFTP "+host+":"+port);
 		row.add(Root.COLUMN_ICON,R.mipmap.sym_def_app_icon);

@@ -10,7 +10,8 @@ import android.os.Bundle;
 
 public class MainActivity extends PreferenceActivity
 	implements OnSharedPreferenceChangeListener {
-	private EditTextPreference hostText, portText, usernameText, passwdText;
+	private EditTextPreference hostText, portText, usernameText, passwdText,
+		mountpointText;
 
 	private void notifyRootChanges(){
 		Uri uri=DocumentsContract.buildRootsUri("org.safsftp");
@@ -26,6 +27,7 @@ public class MainActivity extends PreferenceActivity
 		portText=(EditTextPreference)findPreference("port");
 		usernameText=(EditTextPreference)findPreference("username");
 		passwdText=(EditTextPreference)findPreference("passwd");
+		mountpointText=(EditTextPreference)findPreference("mountpoint");
 
 		SharedPreferences settings=getPreferenceScreen().getSharedPreferences();
 		settings.registerOnSharedPreferenceChangeListener(this);
@@ -37,6 +39,8 @@ public class MainActivity extends PreferenceActivity
 			usernameText.setSummary(settings.getString("username", ""));
 		if (!settings.getString("passwd", "").equals(""))
 			passwdText.setSummary(getString(R.string.passwd_filled));
+		if (!settings.getString("mountpoint", "").equals(""))
+			mountpointText.setSummary(settings.getString("mountpoint",""));
 }
 
 	@Override
@@ -67,6 +71,12 @@ public class MainActivity extends PreferenceActivity
 				passwdText.setSummary(getString(R.string.passwd_summary));
 			else
 				passwdText.setSummary(getString(R.string.passwd_filled));
+			break;
+		case "mountpoint":
+			if (settings.getString("mountpoint", "").equals(""))
+				mountpointText.setSummary(getString(R.string.mountpoint_summary));
+			else
+				mountpointText.setSummary(settings.getString("mountpoint",""));
 			break;
 		}
 	}
