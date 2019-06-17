@@ -31,7 +31,6 @@ import org.safsftp.ReadTask;
 
 public class SFTPDocumentsProvider extends DocumentsProvider {
 	private Connection connection;
-	private SFTPv3Client sftp;
 	private String host=null,port=null; //TODO: multiple server support
 	private ToastThread lthread;
 	
@@ -62,21 +61,21 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		return "application/octet-stream";
 	}
 
-	private boolean retriveConnection() {
+	private SFTPv3Client retriveConnection() {
 		try {
 			connection.ping();
-			return true;
+			return new SFTPv3Client(connection);
 		}
 		catch(Exception e){
 		}
+		SharedPreferences settings=PreferenceManager
+			.getDefaultSharedPreferences(getContext());
+		if(host==null||port==null){
+			host=settings.getString("host","");
+			port=settings.getString("port","22");
+		}
 		Log.v("SFTP","connect "+host+":"+port);
 		try {
-			SharedPreferences settings=PreferenceManager
-				.getDefaultSharedPreferences(getContext());
-			if(host==null||port==null){
-				host=settings.getString("host","");
-				port=settings.getString("port","22");
-			}
 			connection=new Connection(host,Integer.parseInt(port));
 			connection.connect(null,10000,10000);
 			if(!connection.authenticateWithPassword(settings.getString("username",""),
@@ -85,22 +84,16 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 				msg.obj="SFTP auth failed.";
 				lthread.handler.sendMessage(msg);
 			}
-			sftp=new SFTPv3Client(connection);
-			sftp.setCharset(null);
-			Message msg=lthread.handler.obtainMessage();
-			msg.obj="SFTP connect succeed.";
-			lthread.handler.sendMessage(msg);
+			return new SFTPv3Client(connection);
 		}
 		catch(Exception e){
 			Log.e("SFTP","connect "+e.toString());
 			Message msg=lthread.handler.obtainMessage();
 			msg.obj=e.toString();
 			lthread.handler.sendMessage(msg);
-			sftp.close();
 			connection.close();
-			return false;
 		}
-		return true;
+		return null;
 	}
 
 	private void editPolicyIfMainThread(){
@@ -124,7 +117,8 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			throw new UnsupportedOperationException("Mode "+mode+" is not supported yet.");
 		}
 		editPolicyIfMainThread();
-		if(!retriveConnection()){
+		SFTPv3Client sftp;
+		if((sftp=retriveConnection())==null){
 			//TODO notify error
 			return null;
 		}
@@ -151,7 +145,8 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		MatrixCursor result=new MatrixCursor(projection!=null?projection:DEFAULT_DOC_PROJECTION);
 		Log.v("SFTP","qcf "+parentDocumentId+" on "+host+":"+port);
 		editPolicyIfMainThread();
-		if(!retriveConnection()){
+		SFTPv3Client sftp;
+		if((sftp=retriveConnection())==null){
 			//TODO notify error
 			return result;
 		}
@@ -180,6 +175,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			msg.obj=e.toString();
 			lthread.handler.sendMessage(msg);
 		}
+		sftp.close();
 		return result;
 	}
 
@@ -187,7 +183,8 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		MatrixCursor result=new MatrixCursor(projection!=null?projection:DEFAULT_DOC_PROJECTION);
 		Log.v("SFTP","qf "+documentId+" on "+host+":"+port);
 		editPolicyIfMainThread();
-		if(!retriveConnection()){
+		SFTPv3Client sftp;
+		if((sftp=retriveConnection())==null){
 			//TODO notify error
 			return result;
 		}
@@ -207,13 +204,13 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			msg.obj=e.toString();
 			lthread.handler.sendMessage(msg);
 		}
+		sftp.close();
 		return result;
 	}
 
 	public Cursor queryRoots(String[] projection) {
 		try {
 			connection.ping();
-			sftp.close();
 			connection.close();
 		}
 		catch(Exception e){

@@ -44,6 +44,7 @@ public class ReadTask extends AsyncTask<Void,Void,Void> {
 		catch(Exception e){
 			Log.e("SFTP","close file "+e.toString());
 		}
+		sftp.close();
 		return null;
 	}
 }
