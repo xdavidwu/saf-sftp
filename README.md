@@ -4,7 +4,7 @@
 
 ## Current Features
 
-* Traverse home tree
+* Traverse the tree under specified path
 * Read file support
 
 ## Notes
