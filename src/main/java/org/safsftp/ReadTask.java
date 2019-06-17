@@ -33,11 +33,16 @@ public class ReadTask extends AsyncTask<Void,Void,Void> {
 				acos.write(buf,0,size);
 				offset+=size;
 			}
-			sftp.closeFile(file);
 			acos.close();
 		}
 		catch(Exception e){
 			Log.e("SFTP","read file "+e.toString());
+		}
+		try{
+			sftp.closeFile(file);
+		}
+		catch(Exception e){
+			Log.e("SFTP","close file "+e.toString());
 		}
 		return null;
 	}
