@@ -1,20 +1,17 @@
 buildscript {
 	repositories {
 		google()
-		jcenter()
-		maven {
-			url 'https://oss.jfrog.org/artifactory/oss-snapshot-local/'
-		}
+		mavenCentral()
 	}
 	dependencies {
-		classpath 'com.android.tools.build:gradle:3.4.1'
+		classpath 'com.android.tools.build:gradle:7.0.1'
 	}
 }
 apply plugin: 'com.android.application'
 
 android {
-	compileSdkVersion 'android-28'
-	buildToolsVersion '28.0.3'
+	compileSdkVersion 'android-31'
+	buildToolsVersion '31'
 
 	defaultConfig {
 		minSdkVersion 19
