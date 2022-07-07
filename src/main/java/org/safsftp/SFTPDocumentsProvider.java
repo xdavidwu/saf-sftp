@@ -1,13 +1,16 @@
 package org.safsftp;
 
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.os.CancellationSignal;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
 import android.os.ParcelFileDescriptor;
+import android.os.storage.StorageManager;
 import android.os.StrictMode;
 import android.preference.PreferenceManager;
 import android.provider.DocumentsContract.Document;
@@ -26,12 +29,11 @@ import com.trilead.ssh2.SFTPv3FileHandle;
 import java.io.IOException;
 import java.util.Vector;
 
-import org.safsftp.ToastThread;
-import org.safsftp.ReadTask;
-
 public class SFTPDocumentsProvider extends DocumentsProvider {
 	private Connection connection;
 	private String host=null,port=null; //TODO: multiple server support
+	private StorageManager sm;
+	private Handler ioHandler;
 	private ToastThread lthread;
 	
 	private static final String[] DEFAULT_ROOT_PROJECTION=new String[]{
@@ -106,8 +108,13 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 
 	@Override
 	public boolean onCreate() {
-		lthread=new ToastThread(getContext());
+		sm = (StorageManager) getContext()
+			.getSystemService(Context.STORAGE_SERVICE);
+		lthread = new ToastThread(getContext());
 		lthread.start();
+		HandlerThread ioThread = new HandlerThread("IO thread");
+		ioThread.start();
+		ioHandler = new Handler(ioThread.getLooper());
 		return true;
 	}
 
@@ -124,20 +131,18 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		}
 		String filename=documentId.substring(documentId.indexOf("/")+1);
 		Log.v("SFTP","od "+documentId+" on "+host+":"+port);
-		ParcelFileDescriptor[] fd;
 		SFTPv3FileHandle file;
 		try {
-			fd=ParcelFileDescriptor.createReliablePipe();
-			file=sftp.openFileRO(filename);
-		}
-		catch(IOException e) {
+			file = sftp.openFileRO(filename);
+			return sm.openProxyFileDescriptor(
+				ParcelFileDescriptor.MODE_READ_ONLY,
+				new SFTPProxyFileDescriptorCallback(sftp, file),
+				ioHandler);
+		} catch (IOException e) {
 			//TODO notify error
 			Log.e("SFTP","read file "+filename+" init "+e.toString());
 			return null;
 		}
-		new ReadTask(sftp,file,fd[1]).execute();
-		Log.v("SFTP","od "+documentId+" on "+host+":"+port+" return");
-		return fd[0];
 	}
 
 	public Cursor queryChildDocuments(String parentDocumentId,
