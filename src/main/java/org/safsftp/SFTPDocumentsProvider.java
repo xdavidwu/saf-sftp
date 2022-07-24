@@ -14,6 +14,7 @@ import android.os.ParcelFileDescriptor;
 import android.os.storage.StorageManager;
 import android.os.StrictMode;
 import android.preference.PreferenceManager;
+import android.provider.DocumentsContract;
 import android.provider.DocumentsContract.Document;
 import android.provider.DocumentsContract.Root;
 import android.provider.DocumentsProvider;
@@ -74,11 +75,25 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		lthread.handler.sendMessage(m);
 	}
 
-	private SFTPv3Client retriveConnection() {
-		try {
-			connection.ping();
-			return new SFTPv3Client(connection);
-		} catch (Exception e) {
+	private void throwOrAddErrorExtra(String msg, Cursor cursor) {
+		if (cursor != null) {
+			Bundle extra = new Bundle();
+			extra.putString(DocumentsContract.EXTRA_ERROR, msg);
+			cursor.setExtras(extra);
+		} else {
+			toast(msg);
+			throw new IllegalStateException(msg);
+		}
+	}
+
+	private SFTPv3Client retriveConnection(Cursor cursor) {
+		if (connection != null) {
+			try {
+				connection.ping();
+				return new SFTPv3Client(connection);
+			} catch (IOException e) {
+				// continue with new connection attempt
+			}
 		}
 		SharedPreferences settings =
 			PreferenceManager.getDefaultSharedPreferences(getContext());
@@ -92,15 +107,15 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			connection.connect(null, 10000, 10000);
 			if (!connection.authenticateWithPassword(settings.getString("username", ""),
 				    settings.getString("passwd", ""))) {
-				toast("Authentication failed.");
+				throwOrAddErrorExtra("Authentication failed.", cursor);
 				connection = null;
 				return null;
 			}
 			return new SFTPv3Client(connection);
-		} catch (Exception e) {
-			Log.e("SFTP", "connect: " + e.toString());
-			toast("content: " + e.toString());
+		} catch (IOException e) {
+			throwOrAddErrorExtra("connect: " + e.toString(), cursor);
 			connection.close();
+			connection = null;
 		}
 		return null;
 	}
@@ -131,21 +146,16 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 				"Mode " + mode + " is not supported yet.");
 		}
 		editPolicyIfMainThread();
-		SFTPv3Client sftp;
-		if ((sftp = retriveConnection()) == null) {
-			// TODO notify error
-			return null;
-		}
+		SFTPv3Client sftp = retriveConnection(null);
 		String filename = documentId.substring(documentId.indexOf("/") + 1);
 		Log.v("SFTP", "od " + documentId + " on " + host + ":" + port);
-		SFTPv3FileHandle file;
 		try {
-			file = sftp.openFileRO(filename);
+			SFTPv3FileHandle file = sftp.openFileRO(filename);
 			return sm.openProxyFileDescriptor(ParcelFileDescriptor.MODE_READ_ONLY,
 				new SFTPProxyFileDescriptorCallback(sftp, file), ioHandler);
 		} catch (IOException e) {
-			// TODO notify error
-			Log.e("SFTP", "read file " + filename + " init " + e.toString());
+			// throws
+			throwOrAddErrorExtra("open (ro): " + e.toString(), null);
 			return null;
 		}
 	}
@@ -156,9 +166,8 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			new MatrixCursor(projection != null ? projection : DEFAULT_DOC_PROJECTION);
 		Log.v("SFTP", "qcf " + parentDocumentId + " on " + host + ":" + port);
 		editPolicyIfMainThread();
-		SFTPv3Client sftp;
-		if ((sftp = retriveConnection()) == null) {
-			// TODO notify error
+		SFTPv3Client sftp = retriveConnection(result);
+		if (sftp == null) {
 			return result;
 		}
 		String filename = parentDocumentId.substring(parentDocumentId.indexOf("/") + 1);
@@ -185,8 +194,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 					entry.attributes.mtime * 1000);
 			}
 		} catch (Exception e) {
-			Log.e("SFTP", "qcf " + parentDocumentId + " " + e.toString());
-			toast(e.toString());
+			throwOrAddErrorExtra(e.toString(), result);
 		}
 		sftp.close();
 		return result;
@@ -197,9 +205,8 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			new MatrixCursor(projection != null ? projection : DEFAULT_DOC_PROJECTION);
 		Log.v("SFTP", "qf " + documentId + " on " + host + ":" + port);
 		editPolicyIfMainThread();
-		SFTPv3Client sftp;
-		if ((sftp = retriveConnection()) == null) {
-			// TODO notify error
+		SFTPv3Client sftp = retriveConnection(result);
+		if (sftp == null) {
 			return result;
 		}
 		String filename = documentId.substring(documentId.indexOf("/") + 1);
@@ -213,19 +220,21 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 				res.isDirectory() ? Document.MIME_TYPE_DIR : getMime(filename));
 			row.add(Document.COLUMN_SIZE, res.size);
 			row.add(Document.COLUMN_LAST_MODIFIED, res.mtime * 1000);
-		} catch (Exception e) {
-			Log.e("SFTP", "qf " + documentId + " " + e.toString());
-			toast(e.toString());
+		} catch (IOException e) {
+			throwOrAddErrorExtra(e.toString(), result);
 		}
 		sftp.close();
 		return result;
 	}
 
 	public Cursor queryRoots(String[] projection) {
-		try {
-			connection.ping();
-			connection.close();
-		} catch (Exception e) {
+		if (connection != null) {
+			try {
+				// XXX: why did we add ping?
+				connection.ping();
+				connection.close();
+			} catch (IOException e) {
+			}
 		}
 		MatrixCursor result =
 			new MatrixCursor(projection != null ? projection : DEFAULT_ROOT_PROJECTION);
