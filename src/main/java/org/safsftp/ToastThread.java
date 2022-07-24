@@ -10,18 +10,18 @@ public class ToastThread extends Thread {
 	public Handler handler;
 	private Context context;
 
-	public ToastThread(Context context){
-		this.context=context;
+	public ToastThread(Context context) {
+		this.context = context;
 	}
 
 	public void run() {
 		Looper.prepare();
-		handler=new Handler() {
+		handler = new Handler() {
 			public void handleMessage(Message msg) {
-				Toast.makeText(context,(String)msg.obj,Toast.LENGTH_SHORT).show();
+				Toast.makeText(context, (String) msg.obj, Toast.LENGTH_SHORT)
+					.show();
 			}
 		};
 		Looper.loop();
 	}
 }
-

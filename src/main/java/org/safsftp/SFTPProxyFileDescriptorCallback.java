@@ -14,7 +14,6 @@ public class SFTPProxyFileDescriptorCallback extends ProxyFileDescriptorCallback
 	private SFTPv3Client sftp;
 	private SFTPv3FileHandle file;
 
-
 	public SFTPProxyFileDescriptorCallback(SFTPv3Client sftp, SFTPv3FileHandle file) {
 		this.sftp = sftp;
 		this.file = file;
@@ -30,8 +29,7 @@ public class SFTPProxyFileDescriptorCallback extends ProxyFileDescriptorCallback
 	}
 
 	@Override
-	public int onRead(long offset, int size, byte[] data)
-		throws ErrnoException {
+	public int onRead(long offset, int size, byte[] data) throws ErrnoException {
 		try {
 			return sftp.read(file, offset, data, 0, size);
 		} catch (IOException e) {
@@ -43,6 +41,7 @@ public class SFTPProxyFileDescriptorCallback extends ProxyFileDescriptorCallback
 	public void onRelease() {
 		try {
 			sftp.closeFile(file);
-		} catch (IOException e) {} //TODO
+		} catch (IOException e) {
+		} // TODO
 	}
 }
