@@ -27,6 +27,7 @@ import com.trilead.ssh2.SFTPv3FileAttributes;
 import com.trilead.ssh2.SFTPv3FileHandle;
 
 import java.io.IOException;
+import java.util.Locale;
 import java.util.Vector;
 
 public class SFTPDocumentsProvider extends DocumentsProvider {
@@ -53,12 +54,15 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 	};
 
 	private static String getMime(String filename) {
-		int idx=filename.lastIndexOf(".");
-		if(idx>0){
-			String mime=MimeTypeMap.getSingleton()
+		int idx = filename.lastIndexOf(".");
+		if(idx > 0){
+			String mime = MimeTypeMap.getSingleton()
 				.getMimeTypeFromExtension(filename
-				.substring(idx+1).toLowerCase());
-			if(mime!=null)return mime;
+					.substring(idx + 1)
+					.toLowerCase(Locale.ROOT));
+			if (mime != null) {
+				return mime;
+			}
 		}
 		return "application/octet-stream";
 	}

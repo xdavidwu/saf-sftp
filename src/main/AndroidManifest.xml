@@ -10,8 +10,8 @@
 		  android:icon="@mipmap/sym_def_app_icon"
 		  android:allowBackup="false">
 		<activity android:name="MainActivity"
-			android:label="@string/app_name"
-			android:theme="@android:style/Theme.DeviceDefault">
+			android:theme="@android:style/Theme.DeviceDefault"
+			android:exported="true">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
 				<category android:name="android.intent.category.LAUNCHER" />
