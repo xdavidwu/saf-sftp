@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.MatrixCursor;
+import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -37,6 +38,8 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 	private Handler ioHandler;
 	private ToastThread lthread;
 
+	private static final String TOAST_PREFIX = "SAF-SFTP: ";
+
 	private static final String[] DEFAULT_ROOT_PROJECTION = new String[] {
 		Root.COLUMN_ROOT_ID,
 		Root.COLUMN_FLAGS,
@@ -65,6 +68,12 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		return "application/octet-stream";
 	}
 
+	private void toast(String msg) {
+		Message m = lthread.handler.obtainMessage();
+		m.obj = TOAST_PREFIX + msg;
+		lthread.handler.sendMessage(m);
+	}
+
 	private SFTPv3Client retriveConnection() {
 		try {
 			connection.ping();
@@ -83,16 +92,14 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			connection.connect(null, 10000, 10000);
 			if (!connection.authenticateWithPassword(settings.getString("username", ""),
 				    settings.getString("passwd", ""))) {
-				Message msg = lthread.handler.obtainMessage();
-				msg.obj = "SFTP auth failed.";
-				lthread.handler.sendMessage(msg);
+				toast("Authentication failed.");
+				connection = null;
+				return null;
 			}
 			return new SFTPv3Client(connection);
 		} catch (Exception e) {
-			Log.e("SFTP", "connect " + e.toString());
-			Message msg = lthread.handler.obtainMessage();
-			msg.obj = e.toString();
-			lthread.handler.sendMessage(msg);
+			Log.e("SFTP", "connect: " + e.toString());
+			toast("content: " + e.toString());
 			connection.close();
 		}
 		return null;
@@ -179,9 +186,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			}
 		} catch (Exception e) {
 			Log.e("SFTP", "qcf " + parentDocumentId + " " + e.toString());
-			Message msg = lthread.handler.obtainMessage();
-			msg.obj = e.toString();
-			lthread.handler.sendMessage(msg);
+			toast(e.toString());
 		}
 		sftp.close();
 		return result;
@@ -210,9 +215,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			row.add(Document.COLUMN_LAST_MODIFIED, res.mtime * 1000);
 		} catch (Exception e) {
 			Log.e("SFTP", "qf " + documentId + " " + e.toString());
-			Message msg = lthread.handler.obtainMessage();
-			msg.obj = e.toString();
-			lthread.handler.sendMessage(msg);
+			toast(e.toString());
 		}
 		sftp.close();
 		return result;
