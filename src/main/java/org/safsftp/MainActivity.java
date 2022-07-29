@@ -4,13 +4,17 @@ import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.os.StrictMode;
 import android.preference.EditTextPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.provider.DocumentsContract;
-import android.os.AsyncTask;
-import android.os.Bundle;
-import android.os.StrictMode;
+import android.text.Spannable;
+import android.text.SpannableString;
+import android.text.SpannableStringBuilder;
+import android.text.style.TypefaceSpan;
 import android.util.Log;
 
 import com.trilead.ssh2.Connection;
@@ -30,6 +34,7 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 				byte[] serverHostKey) {
 			CompletableFuture<Boolean> acceptFuture =
 				new CompletableFuture<>();
+
 			byte[] md5, sha256;
 			try {
 				md5 = MessageDigest.getInstance("MD5").digest(serverHostKey);
@@ -41,21 +46,33 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 			} catch (NoSuchAlgorithmException e) {
 				throw new IllegalStateException("SHA-256 not available");
 			}
-			final String key64 = Base64.getEncoder().encodeToString(serverHostKey);
-			final String md5Str = String.format(
-				"%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:" +
+
+			final SpannableString key64 = new SpannableString(
+				Base64.getEncoder().encodeToString(serverHostKey));
+			final SpannableString md5Str = new SpannableString(String.format(
+				"MD5:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:" +
 				"%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x", md5[0], md5[1],
 				md5[2], md5[3], md5[4], md5[5], md5[6], md5[7], md5[8], md5[9],
-				md5[10], md5[11], md5[12], md5[13], md5[14], md5[15]);
-			final String sha256Str = Base64.getEncoder().withoutPadding().encodeToString(sha256);
+				md5[10], md5[11], md5[12], md5[13], md5[14], md5[15]));
+			final SpannableString sha256Str = new SpannableString("SHA-256:" +
+				Base64.getEncoder().withoutPadding().encodeToString(sha256));
+
+			key64.setSpan(new TypefaceSpan("monospace"), 0, key64.length(),
+				Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+			md5Str.setSpan(new TypefaceSpan("monospace"), 0, md5Str.length(),
+				Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+			sha256Str.setSpan(new TypefaceSpan("monospace"), 0,
+				sha256Str.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
 
 			MainActivity.this.runOnUiThread(() -> {
 				new AlertDialog.Builder(MainActivity.this)
 					.setTitle("Host key verification")
-					.setMessage(String.format(
-						"Accept SSH server key of type %s: %s?\nMD5:%s\n" +
-						"SHA-256:%s",
-						serverHostKeyAlgorithm, key64, md5Str, sha256Str))
+					.setMessage(new SpannableStringBuilder(
+							"Accept SSH server key of type " +
+							serverHostKeyAlgorithm + ": ")
+						.append(key64).append("?\n")
+						.append(md5Str).append("\n")
+						.append(sha256Str))
 					.setCancelable(false)
 					.setPositiveButton("Accept", (dialog, which) -> {
 						acceptFuture.complete(true);
