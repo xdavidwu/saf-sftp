@@ -163,6 +163,18 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		}
 	}
 
+	private void fillStatRow(MatrixCursor.RowBuilder row, String name,
+			SFTPv3FileAttributes stat) {
+		row.add(Document.COLUMN_DISPLAY_NAME, name);
+		if (stat.isDirectory()) {
+			row.add(Document.COLUMN_MIME_TYPE, Document.MIME_TYPE_DIR);
+		} else if (stat.isRegularFile()) {
+			row.add(Document.COLUMN_MIME_TYPE, getMime(name));
+		}
+		row.add(Document.COLUMN_SIZE, stat.size);
+		row.add(Document.COLUMN_LAST_MODIFIED, stat.mtime * 1000);
+	}
+
 	public Cursor queryChildDocuments(
 		String parentDocumentId, String[] projection, String sortOrder) {
 		MatrixCursor result =
@@ -177,26 +189,14 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		try {
 			Vector<SFTPv3DirectoryEntry> res = sftp.ls(filename);
 			for (SFTPv3DirectoryEntry entry : res) {
-				Log.v("SFTP",
-					"qcf " + parentDocumentId + " " + entry.filename + " "
-						+ entry.attributes.size + " "
-						+ entry.attributes.mtime);
 				if (entry.filename.equals(".") || entry.filename.equals(".."))
 					continue;
 				MatrixCursor.RowBuilder row = result.newRow();
 				row.add(Document.COLUMN_DOCUMENT_ID,
 					parentDocumentId + '/' + entry.filename);
-				row.add(Document.COLUMN_DISPLAY_NAME, entry.filename);
-				if (entry.attributes.isDirectory()) {
-					row.add(Document.COLUMN_MIME_TYPE, Document.MIME_TYPE_DIR);
-				} else if (entry.attributes.isRegularFile()) {
-					row.add(Document.COLUMN_MIME_TYPE, getMime(entry.filename));
-				}
-				row.add(Document.COLUMN_SIZE, entry.attributes.size);
-				row.add(Document.COLUMN_LAST_MODIFIED,
-					entry.attributes.mtime * 1000);
+				fillStatRow(row, entry.filename, entry.attributes);
 			}
-		} catch (Exception e) {
+		} catch (IOException e) {
 			throwOrAddErrorExtra(e.toString(), result);
 		}
 		sftp.close();
@@ -213,16 +213,12 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			return result;
 		}
 		String filename = documentId.substring(documentId.indexOf("/") + 1);
+		String basename = filename.substring(filename.lastIndexOf("/") + 1);
 		try {
-			SFTPv3FileAttributes res = sftp.stat(filename);
+			SFTPv3FileAttributes stat = sftp.stat(filename);
 			MatrixCursor.RowBuilder row = result.newRow();
 			row.add(Document.COLUMN_DOCUMENT_ID, documentId);
-			row.add(Document.COLUMN_DISPLAY_NAME,
-				filename.substring(filename.lastIndexOf("/") + 1));
-			row.add(Document.COLUMN_MIME_TYPE,
-				res.isDirectory() ? Document.MIME_TYPE_DIR : getMime(filename));
-			row.add(Document.COLUMN_SIZE, res.size);
-			row.add(Document.COLUMN_LAST_MODIFIED, res.mtime * 1000);
+			fillStatRow(row, basename, stat);
 		} catch (IOException e) {
 			throwOrAddErrorExtra(e.toString(), result);
 		}
