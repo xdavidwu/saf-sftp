@@ -94,6 +94,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			} catch (IOException e) {
 				// continue with new connection attempt
 			}
+			connection.close();
 		}
 		SharedPreferences settings =
 			PreferenceManager.getDefaultSharedPreferences(getContext());
@@ -102,12 +103,13 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 			port = settings.getString("port", "22");
 		}
 		Log.v("SFTP", "connect " + host + ":" + port);
+		connection = new Connection(host, Integer.parseInt(port));
 		try {
-			connection = new Connection(host, Integer.parseInt(port));
 			connection.connect(null, 10000, 10000);
 			if (!connection.authenticateWithPassword(settings.getString("username", ""),
 				    settings.getString("passwd", ""))) {
 				throwOrAddErrorExtra("Authentication failed.", cursor);
+				connection.close();
 				connection = null;
 				return null;
 			}
@@ -229,12 +231,8 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 
 	public Cursor queryRoots(String[] projection) {
 		if (connection != null) {
-			try {
-				// XXX: why did we add ping?
-				connection.ping();
-				connection.close();
-			} catch (IOException e) {
-			}
+			connection.close();
+			connection = null;
 		}
 		MatrixCursor result =
 			new MatrixCursor(projection != null ? projection : DEFAULT_ROOT_PROJECTION);
