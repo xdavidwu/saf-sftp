@@ -13,11 +13,13 @@ import android.os.Bundle;
 import android.os.StrictMode;
 import android.util.Log;
 
-import com.trilead.ssh2.crypto.Base64;
 import com.trilead.ssh2.Connection;
 import com.trilead.ssh2.ServerHostKeyVerifier;
 
 import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
 
 public class MainActivity extends PreferenceActivity implements OnSharedPreferenceChangeListener {
@@ -26,25 +28,43 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 		public boolean verifyServerHostKey(String hostname, int port,
 				String serverHostKeyAlgorithm,
 				byte[] serverHostKey) {
-			Log.e("SFTP", "verify");
 			CompletableFuture<Boolean> acceptFuture =
 				new CompletableFuture<>();
-			final String key64 = new String(Base64.encode(serverHostKey));
+			byte[] md5, sha256;
+			try {
+				md5 = MessageDigest.getInstance("MD5").digest(serverHostKey);
+			} catch (NoSuchAlgorithmException e) {
+				throw new IllegalStateException("MD5 not available");
+			}
+			try {
+				sha256 = MessageDigest.getInstance("SHA-256").digest(serverHostKey);
+			} catch (NoSuchAlgorithmException e) {
+				throw new IllegalStateException("SHA-256 not available");
+			}
+			final String key64 = Base64.getEncoder().encodeToString(serverHostKey);
+			final String md5Str = String.format(
+				"%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:" +
+				"%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x", md5[0], md5[1],
+				md5[2], md5[3], md5[4], md5[5], md5[6], md5[7], md5[8], md5[9],
+				md5[10], md5[11], md5[12], md5[13], md5[14], md5[15]);
+			final String sha256Str = Base64.getEncoder().withoutPadding().encodeToString(sha256);
+
 			MainActivity.this.runOnUiThread(() -> {
 				new AlertDialog.Builder(MainActivity.this)
 					.setTitle("Host key verification")
-					.setMessage("Accept SSH server key of " +
-						serverHostKeyAlgorithm + " " +
-						key64 + "?")
+					.setMessage(String.format(
+						"Accept SSH server key of type %s: %s?\nMD5:%s\n" +
+						"SHA-256:%s",
+						serverHostKeyAlgorithm, key64, md5Str, sha256Str))
 					.setCancelable(false)
 					.setPositiveButton("Accept", (dialog, which) -> {
 						acceptFuture.complete(true);
-						Log.e("SFTP", "y");
 					}).setNegativeButton("Deny", (dialog, which) -> {
 						acceptFuture.complete(false);
 					})
 					.show();
 			});
+
 			try {
 				return acceptFuture.get();
 			} catch (Exception e) {
