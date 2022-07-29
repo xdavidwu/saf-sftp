@@ -247,6 +247,11 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		if (!port.equals("22")) {
 			title += ":" + port;
 		}
+		if (mountpoint.startsWith("/")) {
+			title += mountpoint;
+		} else if (!mountpoint.equals(".")) {
+			title += "/~/" + mountpoint;
+		}
 		MatrixCursor.RowBuilder row = result.newRow();
 		row.add(Root.COLUMN_ROOT_ID, host + ":" + port);
 		row.add(Root.COLUMN_DOCUMENT_ID, host + ":" + port + "/" + mountpoint);
