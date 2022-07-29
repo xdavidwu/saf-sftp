@@ -1,12 +1,20 @@
 package org.safsftp;
 
+import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.net.Uri;
 import android.preference.EditTextPreference;
+import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.provider.DocumentsContract;
 import android.os.Bundle;
+import android.os.StrictMode;
+import android.util.Log;
+
+import com.trilead.ssh2.Connection;
+
+import java.io.IOException;
 
 public class MainActivity extends PreferenceActivity implements OnSharedPreferenceChangeListener {
 	private EditTextPreference hostText, portText, usernameText, passwdText, mountpointText;
@@ -26,6 +34,34 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 		usernameText = (EditTextPreference) findPreference("username");
 		passwdText = (EditTextPreference) findPreference("passwd");
 		mountpointText = (EditTextPreference) findPreference("mountpoint");
+		Preference testConnection = findPreference("test_connection");
+		testConnection.setOnPreferenceClickListener((p) -> {
+			StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.LAX);
+			SharedPreferences settings = MainActivity.this.
+				getPreferenceScreen().getSharedPreferences();
+			Connection connection = new Connection(
+				settings.getString("host", ""),
+				Integer.parseInt(settings.getString("port", "22")));
+			String result = "Succeed.";
+			try {
+				connection.connect(null, 10000, 10000);
+				if (!connection.authenticateWithPassword(settings.getString("username", ""),
+					    settings.getString("passwd", ""))) {
+					result = "Authentication failed.";
+					connection.close();
+					return true;
+				}
+			} catch (IOException e) {
+				result = e.getMessage();
+			}
+			connection.close();
+			new AlertDialog.Builder(MainActivity.this)
+				.setTitle("Connection test result")
+				.setMessage(result)
+				.setPositiveButton("OK", null)
+				.show();
+			return true;
+		});
 
 		SharedPreferences settings = getPreferenceScreen().getSharedPreferences();
 		settings.registerOnSharedPreferenceChangeListener(this);
