@@ -13,11 +13,47 @@ import android.os.Bundle;
 import android.os.StrictMode;
 import android.util.Log;
 
+import com.trilead.ssh2.crypto.Base64;
 import com.trilead.ssh2.Connection;
+import com.trilead.ssh2.ServerHostKeyVerifier;
 
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 
 public class MainActivity extends PreferenceActivity implements OnSharedPreferenceChangeListener {
+
+	private class DialogKeyVerifier implements ServerHostKeyVerifier {
+		public boolean verifyServerHostKey(String hostname, int port,
+				String serverHostKeyAlgorithm,
+				byte[] serverHostKey) {
+			Log.e("SFTP", "verify");
+			CompletableFuture<Boolean> acceptFuture =
+				new CompletableFuture<>();
+			final String key64 = new String(Base64.encode(serverHostKey));
+			MainActivity.this.runOnUiThread(() -> {
+				new AlertDialog.Builder(MainActivity.this)
+					.setTitle("Host key verification")
+					.setMessage("Accept SSH server key of " +
+						serverHostKeyAlgorithm + " " +
+						key64 + "?")
+					.setCancelable(false)
+					.setPositiveButton("Accept", (dialog, which) -> {
+						acceptFuture.complete(true);
+						Log.e("SFTP", "y");
+					}).setNegativeButton("Deny", (dialog, which) -> {
+						acceptFuture.complete(false);
+					})
+					.show();
+			});
+			try {
+				return acceptFuture.get();
+			} catch (Exception e) {
+				Log.e("SFTP", "verify: " + e.getMessage());
+				return false;
+			}
+		}
+	}
+
 	private EditTextPreference hostText, portText, usernameText, passwdText, mountpointText;
 
 	private void notifyRootChanges() {
@@ -45,7 +81,7 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 			AsyncTask.execute(() -> {
 				String result = "Succeed.";
 				try {
-					connection.connect(null, 10000, 10000);
+					connection.connect(new DialogKeyVerifier(), 10000, 10000);
 					if (!connection.authenticateWithPassword(
 							settings.getString("username", ""),
 							settings.getString("passwd", ""))) {
