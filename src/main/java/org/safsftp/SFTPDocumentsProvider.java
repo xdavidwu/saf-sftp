@@ -56,6 +56,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		Document.COLUMN_MIME_TYPE,
 		Document.COLUMN_LAST_MODIFIED,
 		Document.COLUMN_SIZE,
+		Document.COLUMN_FLAGS,
 	};
 
 	private static String getMime(String filename) {
@@ -173,6 +174,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		}
 		row.add(Document.COLUMN_SIZE, stat.size);
 		row.add(Document.COLUMN_LAST_MODIFIED, stat.mtime * 1000);
+		row.add(Document.COLUMN_FLAGS, 0);
 	}
 
 	public Cursor queryChildDocuments(
