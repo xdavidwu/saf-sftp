@@ -1,6 +1,7 @@
 package org.safsftp;
 
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.net.Uri;
@@ -115,6 +116,8 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 			Connection connection = new Connection(
 				settings.getString("host", ""),
 				Integer.parseInt(settings.getString("port", "22")));
+			ProgressDialog pd = ProgressDialog.show(MainActivity.this,
+				"Connection test", "Connecting.");
 			AsyncTask.execute(() -> {
 				String result = "Succeeded.";
 				try {
@@ -136,6 +139,7 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 						.setMessage(message)
 						.setPositiveButton("OK", null)
 						.show();
+					pd.dismiss();
 				});
 			});
 			return true;
