@@ -243,7 +243,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		port = settings.getString("port", "22");
 		String mountpoint = settings.getString("mountpoint", ".");
 		if (mountpoint.equals("")) mountpoint = ".";
-		String title = "SFTP " + host;
+		String title = "sftp://" + host;
 		if (!port.equals("22")) {
 			title += ":" + port;
 		}
