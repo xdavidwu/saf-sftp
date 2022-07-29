@@ -47,6 +47,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		Root.COLUMN_ICON,
 		Root.COLUMN_TITLE,
 		Root.COLUMN_DOCUMENT_ID,
+		Root.COLUMN_SUMMARY,
 	};
 
 	private static final String[] DEFAULT_DOC_PROJECTION = new String[] {
@@ -248,6 +249,8 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		row.add(Root.COLUMN_FLAGS, 0);
 		row.add(Root.COLUMN_TITLE, "SFTP " + host + ":" + port);
 		row.add(Root.COLUMN_ICON, R.mipmap.sym_def_app_icon);
+		row.add(Root.COLUMN_SUMMARY, "SFTP with user: " +
+			settings.getString("username", ""));
 		return result;
 	}
 }
