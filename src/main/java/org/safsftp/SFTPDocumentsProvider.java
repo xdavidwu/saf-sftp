@@ -243,11 +243,15 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		port = settings.getString("port", "22");
 		String mountpoint = settings.getString("mountpoint", ".");
 		if (mountpoint.equals("")) mountpoint = ".";
+		String title = "SFTP " + host;
+		if (!port.equals("22")) {
+			title += ":" + port;
+		}
 		MatrixCursor.RowBuilder row = result.newRow();
 		row.add(Root.COLUMN_ROOT_ID, host + ":" + port);
 		row.add(Root.COLUMN_DOCUMENT_ID, host + ":" + port + "/" + mountpoint);
 		row.add(Root.COLUMN_FLAGS, 0);
-		row.add(Root.COLUMN_TITLE, "SFTP " + host + ":" + port);
+		row.add(Root.COLUMN_TITLE, title);
 		row.add(Root.COLUMN_ICON, R.mipmap.sym_def_app_icon);
 		row.add(Root.COLUMN_SUMMARY, "SFTP with user: " +
 			settings.getString("username", ""));
