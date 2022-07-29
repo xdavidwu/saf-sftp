@@ -79,7 +79,7 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 				settings.getString("host", ""),
 				Integer.parseInt(settings.getString("port", "22")));
 			AsyncTask.execute(() -> {
-				String result = "Succeed.";
+				String result = "Succeeded.";
 				try {
 					connection.connect(new DialogKeyVerifier(), 10000, 10000);
 					if (!connection.authenticateWithPassword(
