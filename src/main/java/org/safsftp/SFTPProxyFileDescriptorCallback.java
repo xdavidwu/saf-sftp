@@ -3,6 +3,7 @@ package org.safsftp;
 import android.os.ProxyFileDescriptorCallback;
 import android.system.ErrnoException;
 import android.system.OsConstants;
+import android.util.Log;
 
 import java.io.IOException;
 
@@ -31,7 +32,18 @@ public class SFTPProxyFileDescriptorCallback extends ProxyFileDescriptorCallback
 	@Override
 	public int onRead(long offset, int size, byte[] data) throws ErrnoException {
 		try {
-			return sftp.read(file, offset, data, 0, size);
+			Log.v("SFTP", "r: " + size + "@" + offset);
+			int doff = 0;
+			while (doff < size) {
+				int batch = (size - doff) > 32768 ? 32768 : (size - doff);
+				int r = sftp.read(file, offset + doff, data, doff, batch);
+				Log.v("SFTP", "pr: " + batch + "@" + (offset + doff) + "=" + r);
+				doff += r;
+				if (r == -1) {
+					return doff;
+				}
+			}
+			return size;
 		} catch (IOException e) {
 			throw new ErrnoException("read", OsConstants.EIO);
 		}
