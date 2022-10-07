@@ -4,18 +4,18 @@ buildscript {
 		mavenCentral()
 	}
 	dependencies {
-		classpath 'com.android.tools.build:gradle:7.2.1'
+		classpath 'com.android.tools.build:gradle:7.3.0'
 	}
 }
 apply plugin: 'com.android.application'
 
 android {
-	compileSdkVersion 'android-32'
-	buildToolsVersion '32'
+	compileSdkVersion 'android-33'
+	buildToolsVersion '33'
 
 	defaultConfig {
 		minSdkVersion 26
-		targetSdkVersion 32
+		targetSdkVersion 33
 	}
 
 	buildTypes {
@@ -27,7 +27,7 @@ android {
 }
 
 dependencies {
-	implementation "org.connectbot:sshlib:2.2.20"
+	implementation "org.connectbot:sshlib:2.2.21"
 }
 
 allprojects {
