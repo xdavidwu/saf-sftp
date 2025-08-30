@@ -1,4 +1,4 @@
-package org.safsftp;
+package link.xdavidwu.saf.sftp;
 
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
@@ -95,7 +95,7 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 	private EditTextPreference hostText, portText, usernameText, passwdText, mountpointText;
 
 	private void notifyRootChanges() {
-		Uri uri = DocumentsContract.buildRootsUri("org.safsftp");
+		Uri uri = DocumentsContract.buildRootsUri("link.xdavidwu.saf.sftp");
 		getContentResolver().notifyChange(uri, null);
 	}
 

@@ -1,4 +1,4 @@
-package org.safsftp;
+package link.xdavidwu.saf.sftp;
 
 import android.os.ProxyFileDescriptorCallback;
 import android.system.ErrnoException;

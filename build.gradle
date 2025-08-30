@@ -10,11 +10,12 @@ buildscript {
 apply plugin: 'com.android.application'
 
 android {
-	namespace 'org.safsftp'
+	namespace 'link.xdavidwu.saf.sftp'
 	compileSdkVersion 'android-33'
 	buildToolsVersion '35.0.0'
 
 	defaultConfig {
+		applicationId 'org.safsftp'
 		minSdkVersion 26
 		targetSdkVersion 33
 	}
