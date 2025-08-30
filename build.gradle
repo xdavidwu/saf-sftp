@@ -4,14 +4,15 @@ buildscript {
 		mavenCentral()
 	}
 	dependencies {
-		classpath 'com.android.tools.build:gradle:7.3.0'
+		classpath 'com.android.tools.build:gradle:8.12.0'
 	}
 }
 apply plugin: 'com.android.application'
 
 android {
+	namespace 'org.safsftp'
 	compileSdkVersion 'android-33'
-	buildToolsVersion '33'
+	buildToolsVersion '35.0.0'
 
 	defaultConfig {
 		minSdkVersion 26
