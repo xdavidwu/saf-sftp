@@ -263,4 +263,27 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 			throw new UncheckedIOException(e);
 		}
 	}
+
+	// Helpers for ioWithCursor, to short circuit out with
+	// ioWithCursor().orElseThrow(this::haltIt)
+	protected class HaltWithCursorException extends Exception {
+		public static final long serialVersionUID = 42;
+	}
+	protected HaltWithCursorException haltIt() {
+		return new HaltWithCursorException();
+	}
+
+	protected interface QueryOperation {
+		public void execute()
+			throws FileNotFoundException, HaltWithCursorException;
+	}
+
+	protected Cursor performQuery(Cursor c, QueryOperation o)
+			throws FileNotFoundException {
+		try {
+			o.execute();
+		} catch (HaltWithCursorException e) {
+		}
+		return c;
+	}
 }
