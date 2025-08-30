@@ -19,6 +19,7 @@ import android.util.LruCache;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
@@ -249,6 +250,17 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 			extras.putString(DocumentsContract.EXTRA_ERROR, msg);
 			c.setExtras(extras);
 			return Optional.empty();
+		}
+	}
+
+	protected <T> T ioToUnchecked(IOOperation<T> o)
+			throws FileNotFoundException {
+		try {
+			return o.execute();
+		} catch (FileNotFoundException e) {
+			throw e;
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
 		}
 	}
 }
