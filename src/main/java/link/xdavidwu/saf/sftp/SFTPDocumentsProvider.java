@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.MatrixCursor;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Handler;
@@ -18,7 +19,6 @@ import android.provider.DocumentsContract;
 import android.provider.DocumentsContract.Document;
 import android.provider.DocumentsContract.Root;
 import android.provider.DocumentsProvider;
-import android.webkit.MimeTypeMap;
 import android.widget.Toast;
 import android.util.Log;
 
@@ -32,7 +32,9 @@ import java.io.IOException;
 import java.util.Locale;
 import java.util.Vector;
 
-public class SFTPDocumentsProvider extends DocumentsProvider {
+import link.xdavidwu.saf.AbstractUnixLikeDocumentsProvider;
+
+public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	private Connection connection;
 	private String host = null, port = null; // TODO: multiple server support
 	private StorageManager sm;
@@ -59,16 +61,24 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		Document.COLUMN_FLAGS,
 	};
 
-	private static String getMime(String filename) {
-		int idx = filename.lastIndexOf(".");
-		if (idx > 0) {
-			String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(
-				filename.substring(idx + 1).toLowerCase(Locale.ROOT));
-			if (mime != null) {
-				return mime;
-			}
+	@Override
+	protected Uri getRootUri() {
+		SharedPreferences settings =
+			PreferenceManager.getDefaultSharedPreferences(getContext());
+		return new Uri.Builder().scheme("sftp")
+			.authority(settings.getString("username", "") + "@" + host + ":" + port).build();
+	}
+
+	// use . as home, we don't show . it should be fine
+	@Override
+	protected String pathFromDocumentId(String documentId) {
+		var path = super.pathFromDocumentId(documentId);
+		if (path.startsWith("/./")) {
+			return path.substring(1);
+		} else if (path.equals("/.")) {
+			return ".";
 		}
-		return "application/octet-stream";
+		return path;
 	}
 
 	private void toast(String msg) {
@@ -151,7 +161,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		}
 		editPolicyIfMainThread();
 		SFTPv3Client sftp = retriveConnection(null);
-		String filename = documentId.substring(documentId.indexOf("/") + 1);
+		String filename = pathFromDocumentId(documentId);
 		Log.v("SFTP", "od " + documentId + " on " + host + ":" + port);
 		try {
 			SFTPv3FileHandle file = sftp.openFileRO(filename);
@@ -167,11 +177,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 	private void fillStatRow(MatrixCursor.RowBuilder row, String name,
 			SFTPv3FileAttributes stat) {
 		row.add(Document.COLUMN_DISPLAY_NAME, name);
-		if (stat.isDirectory()) {
-			row.add(Document.COLUMN_MIME_TYPE, Document.MIME_TYPE_DIR);
-		} else if (stat.isRegularFile()) {
-			row.add(Document.COLUMN_MIME_TYPE, getMime(name));
-		}
+		row.add(Document.COLUMN_MIME_TYPE, getType(stat.permissions, name));
 		row.add(Document.COLUMN_SIZE, stat.size);
 		row.add(Document.COLUMN_LAST_MODIFIED, stat.mtime * 1000);
 		row.add(Document.COLUMN_FLAGS, 0);
@@ -187,7 +193,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		if (sftp == null) {
 			return result;
 		}
-		String filename = parentDocumentId.substring(parentDocumentId.indexOf("/") + 1);
+		String filename = pathFromDocumentId(parentDocumentId);
 		try {
 			Vector<SFTPv3DirectoryEntry> res = sftp.ls(filename);
 			for (SFTPv3DirectoryEntry entry : res) {
@@ -214,7 +220,7 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		if (sftp == null) {
 			return result;
 		}
-		String filename = documentId.substring(documentId.indexOf("/") + 1);
+		String filename = pathFromDocumentId(documentId);
 		String basename = filename.substring(filename.lastIndexOf("/") + 1);
 		try {
 			SFTPv3FileAttributes stat = sftp.stat(filename);
@@ -240,21 +246,16 @@ public class SFTPDocumentsProvider extends DocumentsProvider {
 		host = settings.getString("host", "");
 		port = settings.getString("port", "22");
 		String mountpoint = settings.getString("mountpoint", ".");
-		if (mountpoint.equals("")) mountpoint = ".";
-		String title = "sftp://" + host;
-		if (!port.equals("22")) {
-			title += ":" + port;
+		if (mountpoint.equals("")) {
+			mountpoint = ".";
 		}
-		if (mountpoint.startsWith("/")) {
-			title += mountpoint;
-		} else if (!mountpoint.equals(".")) {
-			title += "/~/" + mountpoint;
-		}
+		var documentId = documentIdFromPath(mountpoint);
 		MatrixCursor.RowBuilder row = result.newRow();
-		row.add(Root.COLUMN_ROOT_ID, host + ":" + port);
-		row.add(Root.COLUMN_DOCUMENT_ID, host + ":" + port + "/" + mountpoint);
+		var rootUri = getRootUri();
+		row.add(Root.COLUMN_ROOT_ID, rootUri.toString());
+		row.add(Root.COLUMN_DOCUMENT_ID, documentId);
 		row.add(Root.COLUMN_FLAGS, 0);
-		row.add(Root.COLUMN_TITLE, title);
+		row.add(Root.COLUMN_TITLE, documentId);
 		row.add(Root.COLUMN_ICON, R.mipmap.sym_def_app_icon);
 		row.add(Root.COLUMN_SUMMARY, "SFTP with user: " +
 			settings.getString("username", ""));
