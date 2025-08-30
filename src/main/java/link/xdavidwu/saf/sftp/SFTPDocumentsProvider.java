@@ -35,8 +35,28 @@ import java.util.Vector;
 import link.xdavidwu.saf.AbstractUnixLikeDocumentsProvider;
 
 public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
+
+	protected record ConnectionParams(String host, int port,
+			String username, String password) {
+
+		protected Connection connect() throws IOException {
+			var connection = new Connection(host, port);
+			connection.connect(null, 10000, 10000);
+			if (!connection.authenticateWithPassword(username, password)) {
+				connection.close();
+				throw new IOException("Unable to authenticate");
+			}
+			return connection;
+		}
+
+		protected Uri getRootUri() {
+			return new Uri.Builder().scheme("sftp")
+				.authority(username + "@" + host + ":" + port).build();
+		}
+	}
+
 	private Connection connection;
-	private String host = null, port = null; // TODO: multiple server support
+	private ConnectionParams params;
 	private StorageManager sm;
 	private Handler ioHandler;
 	private ToastThread lthread;
@@ -63,10 +83,7 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 	@Override
 	protected Uri getRootUri() {
-		SharedPreferences settings =
-			PreferenceManager.getDefaultSharedPreferences(getContext());
-		return new Uri.Builder().scheme("sftp")
-			.authority(settings.getString("username", "") + "@" + host + ":" + port).build();
+		return params.getRootUri();
 	}
 
 	// use . as home, we don't show . it should be fine
@@ -98,6 +115,16 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		}
 	}
 
+	private SharedPreferences.OnSharedPreferenceChangeListener loadConfig =
+			(sp, key) -> {
+		params = new ConnectionParams(
+			sp.getString("host", ""),
+			Integer.parseInt(sp.getString("port", "22")),
+			sp.getString("username", ""),
+			sp.getString("passwd", "")
+		);
+	};
+
 	private SFTPv3Client retriveConnection(Cursor cursor) {
 		if (connection != null) {
 			try {
@@ -108,28 +135,13 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			}
 			connection.close();
 		}
-		SharedPreferences settings =
-			PreferenceManager.getDefaultSharedPreferences(getContext());
-		if (host == null || port == null) {
-			host = settings.getString("host", "");
-			port = settings.getString("port", "22");
-		}
-		Log.v("SFTP", "connect " + host + ":" + port);
-		connection = new Connection(host, Integer.parseInt(port));
+		Log.v("SFTP", "connect");
+		connection = null;
 		try {
-			connection.connect(null, 10000, 10000);
-			if (!connection.authenticateWithPassword(settings.getString("username", ""),
-				    settings.getString("passwd", ""))) {
-				throwOrAddErrorExtra("Authentication failed.", cursor);
-				connection.close();
-				connection = null;
-				return null;
-			}
+			connection = params.connect();
 			return new SFTPv3Client(connection);
 		} catch (IOException e) {
 			throwOrAddErrorExtra("connect: " + e.toString(), cursor);
-			connection.close();
-			connection = null;
 		}
 		return null;
 	}
@@ -150,6 +162,10 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		HandlerThread ioThread = new HandlerThread("IO thread");
 		ioThread.start();
 		ioHandler = new Handler(ioThread.getLooper());
+
+		var sp = PreferenceManager.getDefaultSharedPreferences(getContext());
+		sp.registerOnSharedPreferenceChangeListener(loadConfig);
+		loadConfig.onSharedPreferenceChanged(sp, "");
 		return true;
 	}
 
@@ -162,7 +178,7 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		editPolicyIfMainThread();
 		SFTPv3Client sftp = retriveConnection(null);
 		String filename = pathFromDocumentId(documentId);
-		Log.v("SFTP", "od " + documentId + " on " + host + ":" + port);
+		Log.v("SFTP", "od " + documentId);
 		try {
 			SFTPv3FileHandle file = sftp.openFileRO(filename);
 			return sm.openProxyFileDescriptor(ParcelFileDescriptor.MODE_READ_ONLY,
@@ -187,7 +203,7 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		String parentDocumentId, String[] projection, String sortOrder) {
 		MatrixCursor result =
 			new MatrixCursor(projection != null ? projection : DEFAULT_DOC_PROJECTION);
-		Log.v("SFTP", "qcf " + parentDocumentId + " on " + host + ":" + port);
+		Log.v("SFTP", "qcf " + parentDocumentId);
 		editPolicyIfMainThread();
 		SFTPv3Client sftp = retriveConnection(result);
 		if (sftp == null) {
@@ -214,7 +230,7 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	public Cursor queryDocument(String documentId, String[] projection) {
 		MatrixCursor result =
 			new MatrixCursor(projection != null ? projection : DEFAULT_DOC_PROJECTION);
-		Log.v("SFTP", "qf " + documentId + " on " + host + ":" + port);
+		Log.v("SFTP", "qf " + documentId);
 		editPolicyIfMainThread();
 		SFTPv3Client sftp = retriveConnection(result);
 		if (sftp == null) {
@@ -241,24 +257,26 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		}
 		MatrixCursor result =
 			new MatrixCursor(projection != null ? projection : DEFAULT_ROOT_PROJECTION);
-		SharedPreferences settings =
-			PreferenceManager.getDefaultSharedPreferences(getContext());
-		host = settings.getString("host", "");
-		port = settings.getString("port", "22");
-		String mountpoint = settings.getString("mountpoint", ".");
+		var sp = PreferenceManager.getDefaultSharedPreferences(getContext());
+		String mountpoint = sp.getString("mountpoint", ".");
 		if (mountpoint.equals("")) {
 			mountpoint = ".";
 		}
 		var documentId = documentIdFromPath(mountpoint);
-		MatrixCursor.RowBuilder row = result.newRow();
 		var rootUri = getRootUri();
-		row.add(Root.COLUMN_ROOT_ID, rootUri.toString());
-		row.add(Root.COLUMN_DOCUMENT_ID, documentId);
-		row.add(Root.COLUMN_FLAGS, 0);
-		row.add(Root.COLUMN_TITLE, documentId);
-		row.add(Root.COLUMN_ICON, R.mipmap.sym_def_app_icon);
-		row.add(Root.COLUMN_SUMMARY, "SFTP with user: " +
-			settings.getString("username", ""));
+		MatrixCursor.RowBuilder row = result.newRow();
+		for (var col : result.getColumnNames()) {
+			// TODO make title, summary more useful
+			row.add(switch (col) {
+			case Root.COLUMN_ROOT_ID -> rootUri.toString();
+			case Root.COLUMN_DOCUMENT_ID -> documentId;
+			case Root.COLUMN_FLAGS -> 0;
+			case Root.COLUMN_TITLE -> documentId;
+			case Root.COLUMN_ICON -> R.mipmap.sym_def_app_icon;
+			case Root.COLUMN_SUMMARY -> "SFTP with user: " + params.username();
+			default -> null;
+			});
+		}
 		return result;
 	}
 }
