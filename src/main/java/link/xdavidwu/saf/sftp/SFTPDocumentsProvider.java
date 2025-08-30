@@ -28,11 +28,15 @@ import com.trilead.ssh2.SFTPv3DirectoryEntry;
 import com.trilead.ssh2.SFTPv3FileAttributes;
 import com.trilead.ssh2.SFTPv3FileHandle;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Vector;
 
 import link.xdavidwu.saf.AbstractUnixLikeDocumentsProvider;
+
+// TODO SFTPv3Client should be made AutoClosable
 
 public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
@@ -104,17 +108,6 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		lthread.handler.sendMessage(m);
 	}
 
-	private void throwOrAddErrorExtra(String msg, Cursor cursor) {
-		if (cursor != null) {
-			Bundle extra = new Bundle();
-			extra.putString(DocumentsContract.EXTRA_ERROR, msg);
-			cursor.setExtras(extra);
-		} else {
-			toast(msg);
-			throw new IllegalStateException(msg);
-		}
-	}
-
 	private SharedPreferences.OnSharedPreferenceChangeListener loadConfig =
 			(sp, key) -> {
 		params = new ConnectionParams(
@@ -125,7 +118,7 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		);
 	};
 
-	private SFTPv3Client retriveConnection(Cursor cursor) {
+	private SFTPv3Client getClient() throws IOException {
 		// /shrug if we are somehow invoked on main thread
 		StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.LAX);
 
@@ -137,16 +130,10 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 				// continue with new connection attempt
 			}
 			connection.close();
+			connection = null;
 		}
-		Log.v("SFTP", "connect");
-		connection = null;
-		try {
-			connection = params.connect();
-			return new SFTPv3Client(connection);
-		} catch (IOException e) {
-			throwOrAddErrorExtra("connect: " + e.toString(), cursor);
-		}
-		return null;
+		connection = params.connect();
+		return new SFTPv3Client(connection);
 	}
 
 	@Override
@@ -164,24 +151,20 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		return true;
 	}
 
-	public ParcelFileDescriptor openDocument(
-		String documentId, String mode, CancellationSignal cancellationSignal) {
+	public ParcelFileDescriptor openDocument(String documentId, String mode,
+			CancellationSignal cancellationSignal)
+			throws FileNotFoundException {
 		if (!"r".equals(mode)) {
 			throw new UnsupportedOperationException(
 				"Mode " + mode + " is not supported yet.");
 		}
-		SFTPv3Client sftp = retriveConnection(null);
+		SFTPv3Client sftp = ioToUnchecked(this::getClient);
 		String filename = pathFromDocumentId(documentId);
 		Log.v("SFTP", "od " + documentId);
-		try {
-			SFTPv3FileHandle file = sftp.openFileRO(filename);
-			return sm.openProxyFileDescriptor(ParcelFileDescriptor.MODE_READ_ONLY,
-				new SFTPProxyFileDescriptorCallback(sftp, file), ioHandler);
-		} catch (IOException e) {
-			// throws
-			throwOrAddErrorExtra("open (ro): " + e.toString(), null);
-			return null;
-		}
+		var file = ioToUnchecked(() -> sftp.openFileRO(filename));
+		return ioToUnchecked(() -> sm.openProxyFileDescriptor(
+			ParcelFileDescriptor.MODE_READ_ONLY,
+			new SFTPProxyFileDescriptorCallback(sftp, file), ioHandler));
 	}
 
 	private void fillStatRow(MatrixCursor.RowBuilder row, String name,
@@ -194,51 +177,56 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	}
 
 	public Cursor queryChildDocuments(
-		String parentDocumentId, String[] projection, String sortOrder) {
+		String parentDocumentId, String[] projection, String sortOrder)
+			throws FileNotFoundException {
 		MatrixCursor result =
 			new MatrixCursor(projection != null ? projection : DEFAULT_DOC_PROJECTION);
 		Log.v("SFTP", "qcf " + parentDocumentId);
-		SFTPv3Client sftp = retriveConnection(result);
-		if (sftp == null) {
+		var maybeSftp = ioWithCursor(result, this::getClient);
+		if (maybeSftp.isEmpty()) {
 			return result;
 		}
+		var sftp = maybeSftp.get();
+
 		String filename = pathFromDocumentId(parentDocumentId);
-		try {
-			Vector<SFTPv3DirectoryEntry> res = sftp.ls(filename);
-			for (SFTPv3DirectoryEntry entry : res) {
-				if (entry.filename.equals(".") || entry.filename.equals(".."))
-					continue;
-				MatrixCursor.RowBuilder row = result.newRow();
-				row.add(Document.COLUMN_DOCUMENT_ID,
-					parentDocumentId + '/' + entry.filename);
-				fillStatRow(row, entry.filename, entry.attributes);
-			}
-		} catch (IOException e) {
-			throwOrAddErrorExtra(e.toString(), result);
-		}
+		// XXX raw container type @ SFTPv3Client::ls
+		Optional<Vector<SFTPv3DirectoryEntry>> entries = ioWithCursor(result, () -> sftp.ls(filename));
 		sftp.close();
+		if (entries.isEmpty()) {
+			return result;
+		}
+		for (SFTPv3DirectoryEntry entry : entries.get()) {
+			if (entry.filename.equals(".") || entry.filename.equals(".."))
+				continue;
+			MatrixCursor.RowBuilder row = result.newRow();
+			row.add(Document.COLUMN_DOCUMENT_ID,
+				parentDocumentId + '/' + entry.filename);
+			fillStatRow(row, entry.filename, entry.attributes);
+		}
 		return result;
 	}
 
-	public Cursor queryDocument(String documentId, String[] projection) {
+	public Cursor queryDocument(String documentId, String[] projection)
+			throws FileNotFoundException {
 		MatrixCursor result = new MatrixCursor(
 				projection != null ? projection : DEFAULT_DOC_PROJECTION);
 		Log.v("SFTP", "qf " + documentId);
-		SFTPv3Client sftp = retriveConnection(result);
-		if (sftp == null) {
+		var maybeSftp = ioWithCursor(result, this::getClient);
+		if (maybeSftp.isEmpty()) {
 			return result;
 		}
+		var sftp = maybeSftp.get();
+
 		String filename = pathFromDocumentId(documentId);
 		String basename = filename.substring(filename.lastIndexOf("/") + 1);
-		try {
-			SFTPv3FileAttributes stat = sftp.stat(filename);
-			MatrixCursor.RowBuilder row = result.newRow();
-			row.add(Document.COLUMN_DOCUMENT_ID, documentId);
-			fillStatRow(row, basename, stat);
-		} catch (IOException e) {
-			throwOrAddErrorExtra(e.toString(), result);
-		}
+		var stat = ioWithCursor(result, () -> sftp.stat(filename));
 		sftp.close();
+		if (stat.isEmpty()) {
+			return result;
+		}
+		MatrixCursor.RowBuilder row = result.newRow();
+		row.add(Document.COLUMN_DOCUMENT_ID, documentId);
+		fillStatRow(row, basename, stat.get());
 		return result;
 	}
 
