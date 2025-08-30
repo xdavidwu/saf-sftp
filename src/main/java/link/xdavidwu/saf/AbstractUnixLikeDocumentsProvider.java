@@ -10,6 +10,7 @@ import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.ParcelFileDescriptor;
 import android.os.ParcelFileDescriptor.AutoCloseInputStream;
+import android.provider.DocumentsContract;
 import android.provider.DocumentsContract.Document;
 import android.provider.DocumentsProvider;
 import android.webkit.MimeTypeMap;
@@ -20,6 +21,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Optional;
 
 /*
  * Helpers and partial implementation of a DocumentsProvider with a POSIX
@@ -229,5 +231,24 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		return getDocumentMetadata(documentId, getDocumentType(documentId));
 	}
 
-}
+	protected interface IOOperation<T> {
+		T execute() throws IOException;
+	}
 
+	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o)
+			throws FileNotFoundException {
+		try {
+			return Optional.of(o.execute());
+		} catch (FileNotFoundException e) {
+			throw e;
+		} catch (IOException e) {
+			var extras = new Bundle();
+			var msg = Optional.ofNullable(e.getMessage())
+				.flatMap(s -> s.length() != 0 ? Optional.of(s) : Optional.empty())
+				.orElse(e.getClass().getName());
+			extras.putString(DocumentsContract.EXTRA_ERROR, msg);
+			c.setExtras(extras);
+			return Optional.empty();
+		}
+	}
+}
