@@ -126,6 +126,9 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	};
 
 	private SFTPv3Client retriveConnection(Cursor cursor) {
+		// /shrug if we are somehow invoked on main thread
+		StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.LAX);
+
 		if (connection != null) {
 			try {
 				connection.ping();
@@ -144,14 +147,6 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			throwOrAddErrorExtra("connect: " + e.toString(), cursor);
 		}
 		return null;
-	}
-
-	private void editPolicyIfMainThread() {
-		// FIXME
-		// if(Looper.getMainLooper()==Looper.myLooper()){
-		//	Log.w("SFTP","We're on main thread.");
-		StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.LAX);
-		//}
 	}
 
 	@Override
@@ -175,7 +170,6 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			throw new UnsupportedOperationException(
 				"Mode " + mode + " is not supported yet.");
 		}
-		editPolicyIfMainThread();
 		SFTPv3Client sftp = retriveConnection(null);
 		String filename = pathFromDocumentId(documentId);
 		Log.v("SFTP", "od " + documentId);
@@ -204,7 +198,6 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		MatrixCursor result =
 			new MatrixCursor(projection != null ? projection : DEFAULT_DOC_PROJECTION);
 		Log.v("SFTP", "qcf " + parentDocumentId);
-		editPolicyIfMainThread();
 		SFTPv3Client sftp = retriveConnection(result);
 		if (sftp == null) {
 			return result;
@@ -228,10 +221,9 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	}
 
 	public Cursor queryDocument(String documentId, String[] projection) {
-		MatrixCursor result =
-			new MatrixCursor(projection != null ? projection : DEFAULT_DOC_PROJECTION);
+		MatrixCursor result = new MatrixCursor(
+				projection != null ? projection : DEFAULT_DOC_PROJECTION);
 		Log.v("SFTP", "qf " + documentId);
-		editPolicyIfMainThread();
 		SFTPv3Client sftp = retriveConnection(result);
 		if (sftp == null) {
 			return result;
@@ -251,12 +243,8 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	}
 
 	public Cursor queryRoots(String[] projection) {
-		if (connection != null) {
-			connection.close();
-			connection = null;
-		}
-		MatrixCursor result =
-			new MatrixCursor(projection != null ? projection : DEFAULT_ROOT_PROJECTION);
+		MatrixCursor result = new MatrixCursor(
+				projection != null ? projection : DEFAULT_ROOT_PROJECTION);
 		var sp = PreferenceManager.getDefaultSharedPreferences(getContext());
 		String mountpoint = sp.getString("mountpoint", ".");
 		if (mountpoint.equals("")) {
