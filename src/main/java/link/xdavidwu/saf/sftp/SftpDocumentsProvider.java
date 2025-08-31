@@ -22,36 +22,40 @@ import android.provider.DocumentsProvider;
 import android.widget.Toast;
 import android.util.Log;
 
-import com.trilead.ssh2.Connection;
-import com.trilead.ssh2.SFTPException;
-import com.trilead.ssh2.SFTPv3Client;
-import com.trilead.ssh2.SFTPv3DirectoryEntry;
-import com.trilead.ssh2.SFTPv3FileAttributes;
-import com.trilead.ssh2.SFTPv3FileHandle;
-import com.trilead.ssh2.sftp.ErrorCodes;
-
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.FileSystems;
+import java.time.Duration;
 import java.util.Arrays;
-import java.util.Locale;
+import java.util.List;
 import java.util.Optional;
-import java.util.Vector;
+import java.util.stream.StreamSupport;
+
+import org.apache.sshd.client.SshClient;
+import org.apache.sshd.client.session.ClientSession;
+import org.apache.sshd.common.SshConstants;
+import org.apache.sshd.common.util.io.PathUtils;
+import org.apache.sshd.sftp.client.SftpClient;
+import org.apache.sshd.sftp.client.SftpClientFactory;
+import org.apache.sshd.sftp.common.SftpConstants;
+import org.apache.sshd.sftp.common.SftpException;
 
 import link.xdavidwu.saf.AbstractUnixLikeDocumentsProvider;
+import link.xdavidwu.saf.UncheckedAutoCloseable;
 
-public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
+public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 	protected record ConnectionParams(String host, int port,
 			String username, String password) {
 
-		protected Connection connect() throws IOException {
-			var connection = new Connection(host, port);
-			connection.connect(null, 10000, 10000);
-			if (!connection.authenticateWithPassword(username, password)) {
-				connection.close();
-				throw new IOException("Unable to authenticate");
-			}
-			return connection;
+		protected ClientSession connect() throws IOException {
+			var session = ssh.connect(username, host, port)
+				.verify(Duration.ofSeconds(3))
+				.getClientSession();
+			session.addPasswordIdentity(password);
+			session.auth().verify(Duration.ofSeconds(3));
+			return session;
 		}
 
 		protected Uri getRootUri() {
@@ -60,8 +64,17 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		}
 	}
 
-	private Connection connection;
+	private static final String HEARTBEAT_REQUEST = "keepalive@sftp.saf.xdavidwu.link";
+	private static SshClient ssh;
+	private ClientSession session;
+	static {
+		PathUtils.setUserHomeFolderResolver(() -> FileSystems.getDefault().getPath("/"));
+		ssh = SshClient.setUpDefaultClient();
+		ssh.start();
+	}
 	private ConnectionParams params;
+
+
 	private StorageManager sm;
 	private Handler ioHandler;
 	private ToastThread lthread;
@@ -103,11 +116,12 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		return path;
 	}
 
-	private IOException translateSFTPErrorCodes(IOException e) {
-		if (e instanceof SFTPException s) {
-			switch (s.getServerErrorCode()) {
-			case ErrorCodes.SSH_FX_NO_SUCH_FILE:
-			case ErrorCodes.SSH_FX_NO_SUCH_PATH:
+	@Override
+	protected IOException translateIOException(IOException e) {
+		if (e instanceof SftpException s) {
+			switch (s.getStatus()) {
+			case SftpConstants.SSH_FX_NO_SUCH_FILE:
+			case SftpConstants.SSH_FX_NO_SUCH_PATH:
 				var fnf = new FileNotFoundException(s.getMessage());
 				fnf.initCause(s);
 				return fnf;
@@ -116,27 +130,6 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			}
 		}
 		return e;
-	}
-
-	private <T> T translateSFTPErrorCodes(IOOperation<T> o)
-			throws IOException {
-		try {
-			return o.execute();
-		} catch (IOException e) {
-			throw translateSFTPErrorCodes(e);
-		}
-	}
-
-	@Override
-	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o)
-			throws FileNotFoundException {
-		return super.ioWithCursor(c, () -> translateSFTPErrorCodes(o));
-	}
-
-	@Override
-	protected <T> T ioToUnchecked(IOOperation<T> o)
-			throws FileNotFoundException {
-		return super.ioToUnchecked(() -> translateSFTPErrorCodes(o));
 	}
 
 	private void toast(String msg) {
@@ -155,22 +148,30 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		);
 	};
 
-	private SFTPv3Client getClient() throws IOException {
+	private SftpClient getClient() throws IOException {
 		// /shrug if we are somehow invoked on main thread
 		StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.LAX);
 
-		if (connection != null) {
+		if (session != null) {
+			// org.apache.sshd.client.session.ClientConnectionService::sendHeartBeat
+			var buf = session.createBuffer(
+				SshConstants.SSH_MSG_GLOBAL_REQUEST,
+				HEARTBEAT_REQUEST.length() + Byte.SIZE);
+			buf.putString(HEARTBEAT_REQUEST);
+			buf.putBoolean(true);
 			try {
-				connection.ping();
-				return new SFTPv3Client(connection);
+				session.request(HEARTBEAT_REQUEST, buf,
+					Duration.ofSeconds(10));
+				return SftpClientFactory.instance()
+					.createSftpClient(session);
 			} catch (IOException e) {
-				// continue with new connection attempt
+				// try new session
 			}
-			connection.close();
-			connection = null;
+			session.close();
+			session = null;
 		}
-		connection = params.connect();
-		return new SFTPv3Client(connection);
+		session = params.connect();
+		return SftpClientFactory.instance().createSftpClient(session);
 	}
 
 	@Override
@@ -188,6 +189,7 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		return true;
 	}
 
+	@Override
 	public ParcelFileDescriptor openDocument(String documentId, String mode,
 			CancellationSignal cancellationSignal)
 			throws FileNotFoundException {
@@ -195,25 +197,26 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			throw new UnsupportedOperationException(
 				"Mode " + mode + " is not supported yet.");
 		}
-		SFTPv3Client sftp = ioToUnchecked(this::getClient);
+		var sftp = ioToUnchecked(this::getClient);
 		String filename = pathFromDocumentId(documentId);
 		Log.v("SFTP", "od " + documentId);
-		var file = ioToUnchecked(() -> sftp.openFileRO(filename));
+		var file = ioToUnchecked(() -> sftp.open(filename));
 		return ioToUnchecked(() -> sm.openProxyFileDescriptor(
 			ParcelFileDescriptor.MODE_READ_ONLY,
-			new SFTPProxyFileDescriptorCallback(sftp, file), ioHandler));
+			new SftpProxyFileDescriptorCallback(sftp, file),
+			ioHandler));
 	}
 
 	private Object[] getDocumentRow(String cols[], String documentId,
-			SFTPv3FileAttributes stat) {
+			SftpClient.Attributes stat) {
 		var name = basename(documentId);
-		var type = getType(stat.permissions, name);
+		var type = getType(stat.getPermissions(), name);
 
 		return Arrays.stream(cols).map(c -> switch (c) {
 		case Document.COLUMN_DOCUMENT_ID -> documentId;
 		case Document.COLUMN_DISPLAY_NAME -> name;
 		case Document.COLUMN_MIME_TYPE -> type;
-		case Document.COLUMN_SIZE -> stat.size;
+		case Document.COLUMN_SIZE -> stat.getSize();
 		case Document.COLUMN_FLAGS -> {
 			var flags = 0;
 			if (typeSupportsMetadata(type)) {
@@ -228,21 +231,18 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		}).toArray();
 	}
 
-	protected interface SFTPQueryOperation {
-		public void execute(SFTPv3Client sftp)
+	protected interface SftpQueryOperation {
+		public void execute(SftpClient sftp)
 			throws FileNotFoundException, HaltWithCursorException;
 	}
 
-	protected Cursor performQuery(Cursor c, SFTPQueryOperation o)
+	protected Cursor performQuery(Cursor c, SftpQueryOperation o)
 			throws FileNotFoundException {
 		return performQuery(c, () -> {
-			var sftp = ioWithCursor(c, this::getClient)
-				.orElseThrow(this::haltIt);
-			try {
-				o.execute(sftp);
-			} finally {
-				// XXX SFTPv3Client should be made AutoClosable
-				sftp.close();
+			try (var sftp = new UncheckedAutoCloseable<SftpClient>(
+					ioWithCursor(c, this::getClient)
+					.orElseThrow(this::haltIt))) {
+				o.execute(sftp.c());
 			}
 		});
 	}
@@ -255,16 +255,23 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 		return performQuery(result, sftp -> {
 			var filename = pathFromDocumentId(parentDocumentId);
-			// XXX raw container type @ SFTPv3Client::ls
-			Vector<SFTPv3DirectoryEntry> entries =
-				ioWithCursor(result, () -> sftp.ls(filename))
-					.orElseThrow(this::haltIt);
+			// lazy until iterator creation, shouldn't fail here
+			var entries = ioWithCursor(result, () -> sftp.readDir(filename))
+				.orElseThrow(this::haltIt);
+			var spliterator = ioWithCursor(result, () -> {
+				try {
+					// really calls openDir
+					return entries.spliterator();
+				} catch (UncheckedIOException e) {
+					throw e.getCause();
+				}
+			}).orElseThrow(this::haltIt);
 
-			entries.stream()
-				.filter(entry -> !entry.filename.equals(".") && !entry.filename.equals(".."))
+			StreamSupport.stream(spliterator, false)
+				.filter(entry -> !List.of(".", "..").contains(entry.getFilename()))
 				.map(entry -> {
-					var documentId = parentDocumentId + '/' + entry.filename;
-					return getDocumentRow(cols, documentId, entry.attributes);
+					var documentId = parentDocumentId + '/' + entry.getFilename();
+					return getDocumentRow(cols, documentId, entry.getAttributes());
 				}).forEach(row -> result.addRow(row));
 		});
 	}
@@ -276,7 +283,7 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 		return performQuery(result, sftp -> {
 			var path = pathFromDocumentId(documentId);
-			var stat = ioWithCursor(result, () -> sftp.stat(path))
+			var stat = ioWithCursor(result, () -> sftp.lstat(path))
 				.orElseThrow(this::haltIt);
 			result.addRow(getDocumentRow(cols, documentId, stat));
 		});

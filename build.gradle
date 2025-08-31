@@ -31,10 +31,15 @@ android {
 		sourceCompatibility JavaVersion.VERSION_17
 		targetCompatibility JavaVersion.VERSION_17
 	}
+
+	packagingOptions {
+		exclude 'META-INF/DEPENDENCIES'
+	}
 }
 
 dependencies {
-	implementation "org.connectbot:sshlib:2.2.21"
+	implementation 'org.connectbot:sshlib:2.2.21'
+	implementation 'org.apache.sshd:sshd-sftp:2.16.0'
 }
 
 allprojects {

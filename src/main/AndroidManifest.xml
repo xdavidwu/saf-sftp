@@ -17,7 +17,7 @@
 				<category android:name="android.intent.category.LAUNCHER" />
 			</intent-filter>
 		</activity>
-		<provider android:name="link.xdavidwu.saf.sftp.SFTPDocumentsProvider"
+		<provider android:name="link.xdavidwu.saf.sftp.SftpDocumentsProvider"
 			android:authorities="link.xdavidwu.saf.sftp"
 			android:permission="android.permission.MANAGE_DOCUMENTS"
 			android:grantUriPermissions="true"

@@ -7,15 +7,14 @@ import android.util.Log;
 
 import java.io.IOException;
 
-import com.trilead.ssh2.Connection;
-import com.trilead.ssh2.SFTPv3Client;
-import com.trilead.ssh2.SFTPv3FileHandle;
+import org.apache.sshd.sftp.client.SftpClient;
 
-public class SFTPProxyFileDescriptorCallback extends ProxyFileDescriptorCallback {
-	private SFTPv3Client sftp;
-	private SFTPv3FileHandle file;
+public class SftpProxyFileDescriptorCallback extends ProxyFileDescriptorCallback {
+	private SftpClient sftp;
+	private SftpClient.CloseableHandle file;
 
-	public SFTPProxyFileDescriptorCallback(SFTPv3Client sftp, SFTPv3FileHandle file) {
+	public SftpProxyFileDescriptorCallback(
+			SftpClient sftp, SftpClient.CloseableHandle file) {
 		this.sftp = sftp;
 		this.file = file;
 	}
@@ -23,7 +22,7 @@ public class SFTPProxyFileDescriptorCallback extends ProxyFileDescriptorCallback
 	@Override
 	public long onGetSize() throws ErrnoException {
 		try {
-			return sftp.fstat(file).size;
+			return sftp.stat(file).getSize();
 		} catch (IOException e) {
 			throw new ErrnoException("fstat", OsConstants.EIO);
 		}
@@ -52,7 +51,7 @@ public class SFTPProxyFileDescriptorCallback extends ProxyFileDescriptorCallback
 	@Override
 	public void onRelease() {
 		try {
-			sftp.closeFile(file);
+			sftp.close(file);
 		} catch (IOException e) {
 		} // TODO
 	}
