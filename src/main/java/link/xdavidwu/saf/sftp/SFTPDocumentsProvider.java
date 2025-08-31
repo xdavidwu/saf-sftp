@@ -30,6 +30,7 @@ import com.trilead.ssh2.SFTPv3FileHandle;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Vector;
@@ -165,13 +166,18 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			new SFTPProxyFileDescriptorCallback(sftp, file), ioHandler));
 	}
 
-	private void fillStatRow(MatrixCursor.RowBuilder row, String name,
+	private Object[] getDocumentRow(String cols[], String documentId,
 			SFTPv3FileAttributes stat) {
-		row.add(Document.COLUMN_DISPLAY_NAME, name);
-		row.add(Document.COLUMN_MIME_TYPE, getType(stat.permissions, name));
-		row.add(Document.COLUMN_SIZE, stat.size);
-		row.add(Document.COLUMN_LAST_MODIFIED, stat.mtime * 1000);
-		row.add(Document.COLUMN_FLAGS, 0);
+		var name = basename(documentId);
+
+		return Arrays.stream(cols).map(c -> switch (c) {
+		case Document.COLUMN_DOCUMENT_ID -> documentId;
+		case Document.COLUMN_DISPLAY_NAME -> name;
+		case Document.COLUMN_MIME_TYPE -> getType(stat.permissions, name);
+		case Document.COLUMN_SIZE -> stat.size;
+		case Document.COLUMN_FLAGS -> 0;
+		default -> null;
+		}).toArray();
 	}
 
 	protected interface SFTPQueryOperation {
@@ -196,66 +202,61 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	public Cursor queryChildDocuments(
 			String parentDocumentId, String[] projection, String sortOrder)
 			throws FileNotFoundException {
-		MatrixCursor result =
-			new MatrixCursor(projection != null ? projection : DEFAULT_DOC_PROJECTION);
-		Log.v("SFTP", "qcf " + parentDocumentId);
+		var cols = projection != null ? projection : DEFAULT_DOC_PROJECTION;
+		var result = new MatrixCursor(cols);
+
 		return performQuery(result, sftp -> {
-			String filename = pathFromDocumentId(parentDocumentId);
+			var filename = pathFromDocumentId(parentDocumentId);
 			// XXX raw container type @ SFTPv3Client::ls
 			Vector<SFTPv3DirectoryEntry> entries =
 				ioWithCursor(result, () -> sftp.ls(filename))
 					.orElseThrow(this::haltIt);
 
-			for (SFTPv3DirectoryEntry entry : entries) {
-				if (entry.filename.equals(".") || entry.filename.equals(".."))
-					continue;
-				MatrixCursor.RowBuilder row = result.newRow();
-				row.add(Document.COLUMN_DOCUMENT_ID,
-					parentDocumentId + '/' + entry.filename);
-				fillStatRow(row, entry.filename, entry.attributes);
-			}
+			entries.stream()
+				.filter(entry -> !entry.filename.equals(".") && !entry.filename.equals(".."))
+				.map(entry -> {
+					var documentId = parentDocumentId + '/' + entry.filename;
+					return getDocumentRow(cols, documentId, entry.attributes);
+				}).forEach(row -> result.addRow(row));
 		});
 	}
 
 	public Cursor queryDocument(String documentId, String[] projection)
 			throws FileNotFoundException {
-		MatrixCursor result = new MatrixCursor(
-				projection != null ? projection : DEFAULT_DOC_PROJECTION);
-		Log.v("SFTP", "qf " + documentId);
+		var cols = projection != null ? projection : DEFAULT_DOC_PROJECTION;
+		var result = new MatrixCursor(cols);
+
 		return performQuery(result, sftp -> {
-			String filename = pathFromDocumentId(documentId);
-			String basename = filename.substring(filename.lastIndexOf("/") + 1);
-			var stat = ioWithCursor(result, () -> sftp.stat(filename))
+			var path = pathFromDocumentId(documentId);
+			var stat = ioWithCursor(result, () -> sftp.stat(path))
 				.orElseThrow(this::haltIt);
-			MatrixCursor.RowBuilder row = result.newRow();
-			row.add(Document.COLUMN_DOCUMENT_ID, documentId);
-			fillStatRow(row, basename, stat);
+			result.addRow(getDocumentRow(cols, documentId, stat));
 		});
 	}
 
 	public Cursor queryRoots(String[] projection) {
-		MatrixCursor result = new MatrixCursor(
-				projection != null ? projection : DEFAULT_ROOT_PROJECTION);
+		var cols = projection != null ? projection : DEFAULT_ROOT_PROJECTION;
+		var result = new MatrixCursor(cols);
+
 		var sp = PreferenceManager.getDefaultSharedPreferences(getContext());
-		String mountpoint = sp.getString("mountpoint", ".");
+		var mountpoint = sp.getString("mountpoint", ".");
 		if (mountpoint.equals("")) {
 			mountpoint = ".";
 		}
 		var documentId = documentIdFromPath(mountpoint);
 		var rootUri = getRootUri();
-		MatrixCursor.RowBuilder row = result.newRow();
-		for (var col : result.getColumnNames()) {
-			// TODO make title, summary more useful
-			row.add(switch (col) {
-			case Root.COLUMN_ROOT_ID -> rootUri.toString();
-			case Root.COLUMN_DOCUMENT_ID -> documentId;
-			case Root.COLUMN_FLAGS -> 0;
-			case Root.COLUMN_TITLE -> documentId;
-			case Root.COLUMN_ICON -> R.mipmap.sym_def_app_icon;
-			case Root.COLUMN_SUMMARY -> "SFTP with user: " + params.username();
-			default -> null;
-			});
-		}
+
+		// TODO make title, summary more useful
+		result.addRow(Arrays.stream(cols).map(c -> switch(c) {
+		case Root.COLUMN_ROOT_ID -> rootUri.toString();
+		case Root.COLUMN_DOCUMENT_ID -> documentId;
+		case Root.COLUMN_FLAGS -> 0;
+		case Root.COLUMN_TITLE -> documentId;
+		case Root.COLUMN_ICON -> R.mipmap.sym_def_app_icon;
+		case Root.COLUMN_SUMMARY -> "SFTP with user: " + params.username();
+		default -> null;
+		}).toArray());
+
 		return result;
 	}
 }
