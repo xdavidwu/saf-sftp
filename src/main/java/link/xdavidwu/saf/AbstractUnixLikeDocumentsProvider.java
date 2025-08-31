@@ -101,6 +101,10 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		return builder.build().toString();
 	}
 
+	protected String basename(String path) {
+		return path.substring(path.lastIndexOf("/") + 1);
+	}
+
 	@Override
 	public boolean isChildDocument(String parentDocumentId, String documentId) {
 		return documentId.startsWith(parentDocumentId) &&
