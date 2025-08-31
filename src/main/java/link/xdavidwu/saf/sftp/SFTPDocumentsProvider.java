@@ -207,13 +207,23 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	private Object[] getDocumentRow(String cols[], String documentId,
 			SFTPv3FileAttributes stat) {
 		var name = basename(documentId);
+		var type = getType(stat.permissions, name);
 
 		return Arrays.stream(cols).map(c -> switch (c) {
 		case Document.COLUMN_DOCUMENT_ID -> documentId;
 		case Document.COLUMN_DISPLAY_NAME -> name;
-		case Document.COLUMN_MIME_TYPE -> getType(stat.permissions, name);
+		case Document.COLUMN_MIME_TYPE -> type;
 		case Document.COLUMN_SIZE -> stat.size;
-		case Document.COLUMN_FLAGS -> 0;
+		case Document.COLUMN_FLAGS -> {
+			var flags = 0;
+			if (typeSupportsMetadata(type)) {
+				flags |= Document.FLAG_SUPPORTS_METADATA;
+			}
+			if (typeSupportsThumbnail(type)) {
+				flags |= Document.FLAG_SUPPORTS_THUMBNAIL;
+			}
+			yield flags;
+		}
 		default -> null;
 		}).toArray();
 	}
