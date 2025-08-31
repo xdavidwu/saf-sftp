@@ -23,10 +23,12 @@ import android.widget.Toast;
 import android.util.Log;
 
 import com.trilead.ssh2.Connection;
+import com.trilead.ssh2.SFTPException;
 import com.trilead.ssh2.SFTPv3Client;
 import com.trilead.ssh2.SFTPv3DirectoryEntry;
 import com.trilead.ssh2.SFTPv3FileAttributes;
 import com.trilead.ssh2.SFTPv3FileHandle;
+import com.trilead.ssh2.sftp.ErrorCodes;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -99,6 +101,42 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			return ".";
 		}
 		return path;
+	}
+
+	private IOException translateSFTPErrorCodes(IOException e) {
+		if (e instanceof SFTPException s) {
+			switch (s.getServerErrorCode()) {
+			case ErrorCodes.SSH_FX_NO_SUCH_FILE:
+			case ErrorCodes.SSH_FX_NO_SUCH_PATH:
+				var fnf = new FileNotFoundException(s.getMessage());
+				fnf.initCause(s);
+				return fnf;
+			default:
+				return s;
+			}
+		}
+		return e;
+	}
+
+	private <T> T translateSFTPErrorCodes(IOOperation<T> o)
+			throws IOException {
+		try {
+			return o.execute();
+		} catch (IOException e) {
+			throw translateSFTPErrorCodes(e);
+		}
+	}
+
+	@Override
+	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o)
+			throws FileNotFoundException {
+		return super.ioWithCursor(c, () -> translateSFTPErrorCodes(o));
+	}
+
+	@Override
+	protected <T> T ioToUnchecked(IOOperation<T> o)
+			throws FileNotFoundException {
+		return super.ioToUnchecked(() -> translateSFTPErrorCodes(o));
 	}
 
 	private void toast(String msg) {
