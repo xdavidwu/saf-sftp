@@ -18,7 +18,7 @@
 			</intent-filter>
 		</activity>
 		<provider android:name="link.xdavidwu.saf.sftp.SFTPDocumentsProvider"
-			android:authorities="org.safsftp"
+			android:authorities="link.xdavidwu.saf.sftp"
 			android:permission="android.permission.MANAGE_DOCUMENTS"
 			android:grantUriPermissions="true"
 			android:exported="true">
