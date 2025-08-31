@@ -159,7 +159,7 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		try {
 			ParcelFileDescriptor fd = openDocument(documentIdFromPath(thumbnailPath), "r", signal);
 			return new AssetFileDescriptor(fd, 0, fd.getStatSize());
-		} catch (FileNotFoundException e) {
+		} catch (Exception e) {
 		}
 
 		if (Build.VERSION.SDK_INT >= 30 && ExifInterface.isSupportedMimeType(getDocumentType(documentId))) {
