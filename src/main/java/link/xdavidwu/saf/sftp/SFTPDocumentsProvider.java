@@ -32,10 +32,14 @@ import com.trilead.ssh2.sftp.ErrorCodes;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.FileSystems;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Vector;
+
+import org.apache.sshd.client.SshClient;
+import org.apache.sshd.common.util.io.PathUtils;
 
 import link.xdavidwu.saf.AbstractUnixLikeDocumentsProvider;
 
@@ -60,6 +64,10 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		}
 	}
 
+	static {
+		PathUtils.setUserHomeFolderResolver(() -> FileSystems.getDefault().getPath("/"));
+	}
+	private SshClient ssh = SshClient.setUpDefaultClient();
 	private Connection connection;
 	private ConnectionParams params;
 	private StorageManager sm;
@@ -170,6 +178,7 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			connection = null;
 		}
 		connection = params.connect();
+		ssh.connect(params.username(), params.host(), params.port()).verify().getClientSession().close();
 		return new SFTPv3Client(connection);
 	}
 
@@ -185,6 +194,7 @@ public class SFTPDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		var sp = PreferenceManager.getDefaultSharedPreferences(getContext());
 		sp.registerOnSharedPreferenceChangeListener(loadConfig);
 		loadConfig.onSharedPreferenceChanged(sp, "");
+		ssh.start();
 		return true;
 	}
 
