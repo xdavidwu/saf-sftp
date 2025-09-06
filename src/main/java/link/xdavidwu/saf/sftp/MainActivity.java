@@ -18,80 +18,30 @@ import android.text.SpannableStringBuilder;
 import android.text.style.TypefaceSpan;
 import android.util.Log;
 
-import com.trilead.ssh2.Connection;
-import com.trilead.ssh2.ServerHostKeyVerifier;
-
 import java.io.IOException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.net.SocketAddress;
+import java.nio.file.FileSystems;
+import java.security.PublicKey;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.sshd.client.SshClient;
+import org.apache.sshd.client.session.ClientSession;
+import org.apache.sshd.common.config.keys.KeyUtils;
+import org.apache.sshd.common.digest.BuiltinDigests;
+import org.apache.sshd.common.util.buffer.ByteArrayBuffer;
+import org.apache.sshd.common.util.io.PathUtils;
+
 public class MainActivity extends PreferenceActivity implements OnSharedPreferenceChangeListener {
 
-	private class DialogKeyVerifier implements ServerHostKeyVerifier {
-		public boolean verifyServerHostKey(String hostname, int port,
-				String serverHostKeyAlgorithm,
-				byte[] serverHostKey) {
-			CompletableFuture<Boolean> acceptFuture =
-				new CompletableFuture<>();
-
-			byte[] md5, sha256;
-			try {
-				md5 = MessageDigest.getInstance("MD5").digest(serverHostKey);
-			} catch (NoSuchAlgorithmException e) {
-				throw new IllegalStateException("MD5 not available");
-			}
-			try {
-				sha256 = MessageDigest.getInstance("SHA-256").digest(serverHostKey);
-			} catch (NoSuchAlgorithmException e) {
-				throw new IllegalStateException("SHA-256 not available");
-			}
-
-			final SpannableString key64 = new SpannableString(
-				Base64.getEncoder().encodeToString(serverHostKey));
-			final SpannableString md5Str = new SpannableString(String.format(
-				"MD5:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:" +
-				"%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x", md5[0], md5[1],
-				md5[2], md5[3], md5[4], md5[5], md5[6], md5[7], md5[8], md5[9],
-				md5[10], md5[11], md5[12], md5[13], md5[14], md5[15]));
-			final SpannableString sha256Str = new SpannableString("SHA-256:" +
-				Base64.getEncoder().withoutPadding().encodeToString(sha256));
-
-			key64.setSpan(new TypefaceSpan("monospace"), 0, key64.length(),
-				Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-			md5Str.setSpan(new TypefaceSpan("monospace"), 0, md5Str.length(),
-				Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-			sha256Str.setSpan(new TypefaceSpan("monospace"), 0,
-				sha256Str.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-			MainActivity.this.runOnUiThread(() -> {
-				new AlertDialog.Builder(MainActivity.this)
-					.setTitle("Host key verification")
-					.setMessage(new SpannableStringBuilder(
-							"Accept SSH server key of type " +
-							serverHostKeyAlgorithm + ": ")
-						.append(key64).append("?\n")
-						.append(md5Str).append("\n")
-						.append(sha256Str))
-					.setCancelable(false)
-					.setPositiveButton("Accept", (dialog, which) -> {
-						acceptFuture.complete(true);
-					}).setNegativeButton("Deny", (dialog, which) -> {
-						acceptFuture.complete(false);
-					})
-					.show();
-			});
-
-			try {
-				return acceptFuture.get();
-			} catch (Exception e) {
-				Log.e("SFTP", "verify: " + e.getMessage());
-				return false;
-			}
-		}
+	private static SshClient ssh;
+	static {
+		PathUtils.setUserHomeFolderResolver(() -> FileSystems.getDefault().getPath("/"));
+		ssh = SshClient.setUpDefaultClient();
+		ssh.start();
 	}
-
 	private EditTextPreference hostText, portText, usernameText, passwdText, mountpointText;
 
 	private void notifyRootChanges() {
@@ -113,25 +63,69 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 		testConnection.setOnPreferenceClickListener((p) -> {
 			SharedPreferences settings = MainActivity.this.
 				getPreferenceScreen().getSharedPreferences();
-			Connection connection = new Connection(
-				settings.getString("host", ""),
-				Integer.parseInt(settings.getString("port", "22")));
 			ProgressDialog pd = ProgressDialog.show(MainActivity.this,
 				"Connection test", "Connecting.");
 			AsyncTask.execute(() -> {
 				String result = "Succeeded.";
 				try {
-					connection.connect(new DialogKeyVerifier(), 10000, 10000);
-					if (!connection.authenticateWithPassword(
-							settings.getString("username", ""),
-							settings.getString("passwd", ""))) {
-						result = "Authentication failed.";
-						connection.close();
-					}
+					var session = ssh.connect(
+						settings.getString("username", ""),
+						settings.getString("host", ""),
+						Integer.parseInt(settings.getString("port", "22"))
+					).verify(Duration.ofSeconds(3)).getClientSession();
+					session.addPasswordIdentity(settings.getString("passwd", ""));
+					session.setServerKeyVerifier((ClientSession s, SocketAddress a, PublicKey k) -> {
+						var serverHostKey = k.getEncoded();
+						CompletableFuture<Boolean> acceptFuture =
+							new CompletableFuture<>();
+
+						var raw = new ByteArrayBuffer();
+						raw.putRawPublicKey(k);
+						var key64 = new SpannableString(
+							Base64.getEncoder().encodeToString(
+								Arrays.copyOfRange(raw.array(), 0, raw.wpos())));
+						var md5 = new SpannableString(
+							KeyUtils.getFingerPrint(BuiltinDigests.md5, k));
+						var sha256 = new SpannableString(
+							KeyUtils.getFingerPrint(BuiltinDigests.sha256, k));
+
+						key64.setSpan(new TypefaceSpan("monospace"), 0, key64.length(),
+							Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+						md5.setSpan(new TypefaceSpan("monospace"), 0, md5.length(),
+							Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+						sha256.setSpan(new TypefaceSpan("monospace"), 0,
+							sha256.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+
+						MainActivity.this.runOnUiThread(() -> {
+							new AlertDialog.Builder(MainActivity.this)
+								.setTitle("Host key verification")
+								.setMessage(new SpannableStringBuilder(
+										"Accept SSH server key of type " +
+										KeyUtils.getKeyType(k) + ": ")
+									.append(key64).append("?\n")
+									.append(md5).append("\n")
+									.append(sha256))
+								.setCancelable(false)
+								.setPositiveButton("Accept", (dialog, which) -> {
+									acceptFuture.complete(true);
+								}).setNegativeButton("Deny", (dialog, which) -> {
+									acceptFuture.complete(false);
+								})
+								.show();
+						});
+
+						try {
+							return acceptFuture.get();
+						} catch (Exception e) {
+							Log.e("SFTP", "verify: " + e.getMessage());
+							return false;
+						}
+					});
+					session.auth().verify();
+					session.close();
 				} catch (IOException e) {
 					result = e.getMessage();
 				}
-				connection.close();
 				final String message = result;
 				MainActivity.this.runOnUiThread(() -> {
 					new AlertDialog.Builder(MainActivity.this)
