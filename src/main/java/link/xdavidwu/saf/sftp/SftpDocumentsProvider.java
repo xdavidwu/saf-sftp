@@ -259,19 +259,12 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 		return performQuery(result, sftp -> {
 			var filename = pathFromDocumentId(parentDocumentId);
-			// lazy until iterator creation, shouldn't fail here
-			var entries = ioWithCursor(result, () -> sftp.readDir(filename))
-				.orElseThrow(this::haltIt);
-			var spliterator = ioWithCursor(result, () -> {
-				try {
-					// really calls openDir
-					return entries.spliterator();
-				} catch (UncheckedIOException e) {
-					throw e.getCause();
-				}
-			}).orElseThrow(this::haltIt);
+			// lazy until iterator creation, openDir at iterator
+			var entries = ioWithCursor(result,
+				() -> sftp.readDir(filename).spliterator())
+					.orElseThrow(this::haltIt);
 
-			StreamSupport.stream(spliterator, false)
+			StreamSupport.stream(entries, false)
 				.filter(entry -> !List.of(".", "..").contains(entry.getFilename()))
 				.map(entry -> {
 					var documentId = parentDocumentId + '/' + entry.getFilename();
