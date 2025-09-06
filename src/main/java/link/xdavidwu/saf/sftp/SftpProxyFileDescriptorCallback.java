@@ -10,6 +10,10 @@ import java.io.IOException;
 import org.apache.sshd.sftp.client.SftpClient;
 
 public class SftpProxyFileDescriptorCallback extends ProxyFileDescriptorCallback {
+	private static final int OPENSSH_SFTP_MAX_MSG_LENGTH = 256 * 1024;
+	private static final int OPENSSH_SFTP_MAX_READ_LENGTH = OPENSSH_SFTP_MAX_MSG_LENGTH - 1024;
+	private static final int OPENSSH_SFTP_MAX_WRITE_LENGTH = OPENSSH_SFTP_MAX_MSG_LENGTH - 1024;
+
 	private SftpClient sftp;
 	private SftpClient.CloseableHandle file;
 
@@ -34,7 +38,8 @@ public class SftpProxyFileDescriptorCallback extends ProxyFileDescriptorCallback
 			Log.v("SFTP", "r: " + size + "@" + offset);
 			int doff = 0;
 			while (doff < size) {
-				int batch = (size - doff) > 32768 ? 32768 : (size - doff);
+				int batch = (size - doff) > OPENSSH_SFTP_MAX_READ_LENGTH ?
+					OPENSSH_SFTP_MAX_READ_LENGTH : (size - doff);
 				int r = sftp.read(file, offset + doff, data, doff, batch);
 				Log.v("SFTP", "pr: " + batch + "@" + (offset + doff) + "=" + r);
 				doff += r;
