@@ -313,7 +313,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		result.addRow(Arrays.stream(cols).map(c -> switch(c) {
 		case Root.COLUMN_ROOT_ID -> rootUri.toString();
 		case Root.COLUMN_DOCUMENT_ID -> documentId;
-		case Root.COLUMN_FLAGS -> 0;
+		case Root.COLUMN_FLAGS -> Root.FLAG_SUPPORTS_IS_CHILD;
 		case Root.COLUMN_TITLE -> documentId;
 		case Root.COLUMN_ICON -> R.mipmap.sym_def_app_icon;
 		case Root.COLUMN_SUMMARY -> "SFTP with user: " + params.username();
