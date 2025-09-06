@@ -244,9 +244,11 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 			throws FileNotFoundException {
 		try {
 			return Optional.of(o.execute());
-		} catch (FileNotFoundException e) {
-			throw e;
-		} catch (IOException e) {
+		} catch (IOException|UncheckedIOException u) {
+			var e = u instanceof UncheckedIOException ? u.getCause() : u;
+			if (e instanceof FileNotFoundException f) {
+				throw f;
+			}
 			var extras = new Bundle();
 			var msg = Optional.ofNullable(e.getMessage())
 				.flatMap(s -> s.length() != 0 ? Optional.of(s) : Optional.empty())
