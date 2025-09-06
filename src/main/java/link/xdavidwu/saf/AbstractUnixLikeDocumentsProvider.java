@@ -23,6 +23,7 @@ import java.io.UncheckedIOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
+import java.util.function.Function;
 
 /*
  * Helpers and partial implementation of a DocumentsProvider with a POSIX
@@ -236,19 +237,33 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		return getDocumentMetadata(documentId, getDocumentType(documentId));
 	}
 
+	// translate platform-specific IOException to java-native subtypes
+	protected IOException translateIOException(IOException e) {
+		return e;
+	}
+
 	protected interface IOOperation<T> {
 		T execute() throws IOException;
 	}
 
-	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o)
+	protected <T> T io(IOOperation<T> o, Function<IOException, T> handle)
 			throws FileNotFoundException {
 		try {
-			return Optional.of(o.execute());
-		} catch (IOException|UncheckedIOException u) {
-			var e = u instanceof UncheckedIOException ? u.getCause() : u;
+			return o.execute();
+		} catch (IOException|UncheckedIOException oe) {
+			var e = translateIOException(
+				oe instanceof UncheckedIOException u ? u.getCause() :
+				(IOException) oe);
 			if (e instanceof FileNotFoundException f) {
 				throw f;
 			}
+			return handle.apply(e);
+		}
+	}
+
+	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o)
+			throws FileNotFoundException {
+		return io(() -> Optional.of(o.execute()), e -> {
 			var extras = new Bundle();
 			var msg = Optional.ofNullable(e.getMessage())
 				.flatMap(s -> s.length() != 0 ? Optional.of(s) : Optional.empty())
@@ -256,18 +271,14 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 			extras.putString(DocumentsContract.EXTRA_ERROR, msg);
 			c.setExtras(extras);
 			return Optional.empty();
-		}
+		});
 	}
 
 	protected <T> T ioToUnchecked(IOOperation<T> o)
 			throws FileNotFoundException {
-		try {
-			return o.execute();
-		} catch (FileNotFoundException e) {
-			throw e;
-		} catch (IOException e) {
+		return io(o, e -> {
 			throw new UncheckedIOException(e);
-		}
+		});
 	}
 
 	// Helpers for ioWithCursor, to short circuit out with
