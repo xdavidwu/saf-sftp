@@ -74,6 +74,10 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	}
 	private ConnectionParams params;
 
+	// do not start with a dot
+	// DocumentsUI identify hidden files by presence of /. in documentId
+	// (or display name starting with .)
+	private static final String HOME_IDENTIFIER = ":HOME:";
 
 	private StorageManager sm;
 	private Handler ioHandler;
@@ -108,9 +112,9 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	@Override
 	protected String pathFromDocumentId(String documentId) {
 		var path = super.pathFromDocumentId(documentId);
-		if (path.startsWith("/./")) {
-			return path.substring(1);
-		} else if (path.equals("/.")) {
+		if (path.startsWith("/" + HOME_IDENTIFIER + "/")) {
+			return path.substring(HOME_IDENTIFIER.length() + 2);
+		} else if (path.equals("/" + HOME_IDENTIFIER)) {
 			return ".";
 		}
 		return path;
@@ -295,8 +299,12 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 		var sp = PreferenceManager.getDefaultSharedPreferences(getContext());
 		var mountpoint = sp.getString("mountpoint", ".");
-		if (mountpoint.equals("")) {
-			mountpoint = ".";
+		if (mountpoint.equals("") || mountpoint.equals(".")) {
+			mountpoint = HOME_IDENTIFIER;
+		} else if (mountpoint.startsWith("./")) {
+			mountpoint = HOME_IDENTIFIER + mountpoint.substring(1);
+		} else if (!mountpoint.startsWith("/")) {
+			mountpoint = HOME_IDENTIFIER + "/" + mountpoint;
 		}
 		var documentId = documentIdFromPath(mountpoint);
 		var rootUri = getRootUri();
