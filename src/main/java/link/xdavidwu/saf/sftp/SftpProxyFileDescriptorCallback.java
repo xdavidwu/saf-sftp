@@ -16,7 +16,6 @@ import link.xdavidwu.saf.AbstractUnixLikeProxyFileDescriptorCallback;
 public class SftpProxyFileDescriptorCallback
 		extends AbstractUnixLikeProxyFileDescriptorCallback {
 	private static final int OPENSSH_SFTP_MAX_MSG_LENGTH = 256 * 1024;
-	private static final int OPENSSH_SFTP_MAX_READ_LENGTH = OPENSSH_SFTP_MAX_MSG_LENGTH - 1024;
 	private static final int OPENSSH_SFTP_MAX_WRITE_LENGTH = OPENSSH_SFTP_MAX_MSG_LENGTH - 1024;
 
 	private SftpClient sftp;
@@ -70,10 +69,8 @@ public class SftpProxyFileDescriptorCallback
 			Log.v("SFTP", "r: " + size + "@" + offset);
 			int read = 0;
 			while (read < size) {
-				int batch = (size - read) > OPENSSH_SFTP_MAX_READ_LENGTH ?
-					OPENSSH_SFTP_MAX_READ_LENGTH : (size - read);
-				int r = sftp.read(file, offset + read, data, read, batch);
-				Log.v("SFTP", "pr: " + batch + "@" + (offset + read) + "=" + r);
+				int r = sftp.read(file, offset + read, data, read, size - read);
+				Log.v("SFTP", "pr: " + (size - read) + "@" + (offset + read) + "=" + r);
 				if (r == -1) {
 					return read;
 				}
