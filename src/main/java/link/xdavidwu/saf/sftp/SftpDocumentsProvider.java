@@ -101,6 +101,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		Document.COLUMN_LAST_MODIFIED,
 		Document.COLUMN_SIZE,
 		Document.COLUMN_FLAGS,
+		Document.COLUMN_SUMMARY,
+		Document.COLUMN_ICON,
 	};
 
 	@Override
@@ -214,18 +216,10 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	private Object[] getDocumentRow(SftpClient sftp, Cursor cursor,
 			String documentId, SftpClient.Attributes lstat) {
 		var name = basename(documentId);
-		var stat = lstat;
-		if (lstat.isSymbolicLink()) {
-			Optional<SftpClient.Attributes> maybeStat = Optional.empty();
-			try {
-				maybeStat = ioWithCursor(cursor,
-					() -> sftp.stat(pathFromDocumentId(documentId)),
-					DocumentsContract.EXTRA_INFO,
-					"Cannot stat " + name + ": ");
-			} catch (FileNotFoundException e) {
-			}
-			stat = maybeStat.orElse(lstat);
-		}
+		var path = pathFromDocumentId(documentId);
+		var stat = lstat.isSymbolicLink() ? mustIOWithCursor(cursor,
+			() -> sftp.stat(path), DocumentsContract.EXTRA_INFO,
+			"Cannot stat " + name + ": ").orElse(lstat) : lstat;
 		var type = getType(stat.getPermissions(), name);
 
 		// TODO handle broken symlink
@@ -244,6 +238,24 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 				flags |= Document.FLAG_SUPPORTS_THUMBNAIL;
 			}
 			yield flags;
+		}
+		case Document.COLUMN_ICON -> {
+			if (lstat.isSymbolicLink() && stat.isDirectory()) {
+				// DocumentsUI grid view is hard-coded to system folder icon
+				yield R.drawable.ic_symlink_to_dir;
+			} else if (stat.isSymbolicLink()) {
+				yield R.drawable.ic_broken_symlink;
+			}
+			yield null;
+		}
+		case Document.COLUMN_SUMMARY -> {
+			if (stat.isSymbolicLink()) {
+				yield mustIOWithCursor(cursor, () -> sftp.readLink(path),
+					DocumentsContract.EXTRA_INFO,
+					"Cannot readlink " + name + ": ")
+					.map(s -> "Symlink to " + s).orElse(null);
+			}
+			yield null;
 		}
 		default -> null;
 		}).toArray();
