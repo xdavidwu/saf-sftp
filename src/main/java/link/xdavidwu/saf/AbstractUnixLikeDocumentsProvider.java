@@ -260,17 +260,22 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		}
 	}
 
-	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o)
-			throws FileNotFoundException {
+	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o,
+			String extraKey) throws FileNotFoundException {
 		return io(() -> Optional.of(o.execute()), e -> {
 			var extras = new Bundle();
 			var msg = Optional.ofNullable(e.getMessage())
 				.flatMap(s -> s.length() != 0 ? Optional.of(s) : Optional.empty())
 				.orElse(e.getClass().getName());
-			extras.putString(DocumentsContract.EXTRA_ERROR, msg);
+			extras.putString(extraKey, msg);
 			c.setExtras(extras);
 			return Optional.empty();
 		});
+	}
+
+	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o)
+			throws FileNotFoundException {
+		return ioWithCursor(c, o, DocumentsContract.EXTRA_ERROR);
 	}
 
 	protected <T> T ioToUnchecked(IOOperation<T> o)
