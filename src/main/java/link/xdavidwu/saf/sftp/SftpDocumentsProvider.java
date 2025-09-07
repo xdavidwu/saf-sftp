@@ -211,17 +211,30 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			ioHandler));
 	}
 
-	private Object[] getDocumentRow(String cols[], String documentId,
-			SftpClient.Attributes stat) {
+	private Object[] getDocumentRow(SftpClient sftp, Cursor cursor,
+			String documentId, SftpClient.Attributes lstat) {
 		var name = basename(documentId);
+		var stat = lstat;
+		if (lstat.isSymbolicLink()) {
+			Optional<SftpClient.Attributes> maybeStat = Optional.empty();
+			try {
+				maybeStat = ioWithCursor(cursor,
+					() -> sftp.stat(pathFromDocumentId(documentId)),
+					DocumentsContract.EXTRA_INFO,
+					"Cannot stat " + name + ": ");
+			} catch (FileNotFoundException e) {
+			}
+			stat = maybeStat.orElse(lstat);
+		}
 		var type = getType(stat.getPermissions(), name);
 
-		return Arrays.stream(cols).map(c -> switch (c) {
+		// TODO handle broken symlink
+		return Arrays.stream(cursor.getColumnNames()).map(c -> switch (c) {
 		case Document.COLUMN_DOCUMENT_ID -> documentId;
 		case Document.COLUMN_DISPLAY_NAME -> name;
 		case Document.COLUMN_MIME_TYPE -> type;
-		case Document.COLUMN_SIZE -> stat.getSize();
-		case Document.COLUMN_LAST_MODIFIED -> stat.getModifyTime().toMillis();
+		case Document.COLUMN_SIZE -> lstat.getSize();
+		case Document.COLUMN_LAST_MODIFIED -> lstat.getModifyTime().toMillis();
 		case Document.COLUMN_FLAGS -> {
 			var flags = 0;
 			if (typeSupportsMetadata(type)) {
@@ -269,7 +282,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 				.filter(entry -> !List.of(".", "..").contains(entry.getFilename()))
 				.map(entry -> {
 					var documentId = parentDocumentId + '/' + entry.getFilename();
-					return getDocumentRow(cols, documentId, entry.getAttributes());
+					return getDocumentRow(sftp, result, documentId,
+							entry.getAttributes());
 				}).forEach(row -> result.addRow(row));
 		});
 	}
@@ -283,7 +297,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			var path = pathFromDocumentId(documentId);
 			var stat = ioWithCursor(result, () -> sftp.lstat(path))
 				.orElseThrow(this::haltIt);
-			result.addRow(getDocumentRow(cols, documentId, stat));
+			result.addRow(getDocumentRow(sftp, result, documentId, stat));
 		});
 	}
 
