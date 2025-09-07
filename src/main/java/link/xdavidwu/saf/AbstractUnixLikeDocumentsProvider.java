@@ -36,7 +36,6 @@ import java.util.function.Function;
  *   - EXIF thumbnail on SDK >= 30
  *		- openDocument should support streaming, without downloading the whole file
  * - MIME types, via mode_t and filename
- *   - TODO consider user.mime_type xattr
  *
  */
 public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvider {
