@@ -260,9 +260,20 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		}
 	}
 
-	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o,
-			String extraKey, String prefix) throws FileNotFoundException {
-		return io(() -> Optional.of(o.execute()), e -> {
+	protected <T> T mustIO(IOOperation<T> o, Function<IOException, T> handle) {
+		try {
+			return o.execute();
+		} catch (IOException|UncheckedIOException oe) {
+			var e = translateIOException(
+				oe instanceof UncheckedIOException u ? u.getCause() :
+				(IOException) oe);
+			return handle.apply(e);
+		}
+	}
+
+	private <T> Function<IOException, Optional<T>> handleIOEViaCursor (
+			Cursor c, String extraKey, String prefix) {
+		return e -> {
 			var extras = c.getExtras();
 			if (extras == Bundle.EMPTY) {
 				extras = new Bundle();
@@ -276,7 +287,19 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 				val.length() == 0 ? msg : val + "\n" + msg);
 			c.setExtras(extras);
 			return Optional.empty();
-		});
+		};
+	}
+
+	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o,
+			String extraKey, String prefix) throws FileNotFoundException {
+		return io(() -> Optional.of(o.execute()),
+			handleIOEViaCursor(c, extraKey, prefix));
+	}
+
+	protected <T> Optional<T> mustIOWithCursor(Cursor c, IOOperation<T> o,
+			String extraKey, String prefix) {
+		return mustIO(() -> Optional.of(o.execute()),
+			handleIOEViaCursor(c, extraKey, prefix));
 	}
 
 	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o)
@@ -284,9 +307,19 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		return ioWithCursor(c, o, DocumentsContract.EXTRA_ERROR, "");
 	}
 
+	protected <T> Optional<T> mustIOWithCursor(Cursor c, IOOperation<T> o) {
+		return mustIOWithCursor(c, o, DocumentsContract.EXTRA_ERROR, "");
+	}
+
 	protected <T> T ioToUnchecked(IOOperation<T> o)
 			throws FileNotFoundException {
 		return io(o, e -> {
+			throw new UncheckedIOException(e);
+		});
+	}
+
+	protected <T> T mustIOToUnchecked(IOOperation<T> o) {
+		return mustIO(o, e -> {
 			throw new UncheckedIOException(e);
 		});
 	}
