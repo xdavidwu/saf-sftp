@@ -221,6 +221,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		case Document.COLUMN_DISPLAY_NAME -> name;
 		case Document.COLUMN_MIME_TYPE -> type;
 		case Document.COLUMN_SIZE -> stat.getSize();
+		case Document.COLUMN_LAST_MODIFIED -> stat.getModifyTime().toMillis();
 		case Document.COLUMN_FLAGS -> {
 			var flags = 0;
 			if (typeSupportsMetadata(type)) {
