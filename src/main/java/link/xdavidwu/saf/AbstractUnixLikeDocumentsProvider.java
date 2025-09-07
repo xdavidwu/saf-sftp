@@ -261,7 +261,7 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 	}
 
 	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o,
-			String extraKey) throws FileNotFoundException {
+			String extraKey, String prefix) throws FileNotFoundException {
 		return io(() -> Optional.of(o.execute()), e -> {
 			var extras = c.getExtras();
 			if (extras == Bundle.EMPTY) {
@@ -269,7 +269,7 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 			}
 
 			var val = extras.getString(extraKey, "");
-			var msg = Optional.ofNullable(e.getMessage())
+			var msg = prefix + Optional.ofNullable(e.getMessage())
 				.flatMap(s -> s.length() != 0 ? Optional.of(s) : Optional.empty())
 				.orElse(e.getClass().getName());
 			extras.putString(extraKey,
@@ -281,7 +281,7 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 
 	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o)
 			throws FileNotFoundException {
-		return ioWithCursor(c, o, DocumentsContract.EXTRA_ERROR);
+		return ioWithCursor(c, o, DocumentsContract.EXTRA_ERROR, "");
 	}
 
 	protected <T> T ioToUnchecked(IOOperation<T> o)
