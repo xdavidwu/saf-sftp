@@ -68,16 +68,16 @@ public class SftpProxyFileDescriptorCallback
 	public int onRead(long offset, int size, byte[] data) throws ErrnoException {
 		return io("read", () -> {
 			Log.v("SFTP", "r: " + size + "@" + offset);
-			int doff = 0;
-			while (doff < size) {
-				int batch = (size - doff) > OPENSSH_SFTP_MAX_READ_LENGTH ?
-					OPENSSH_SFTP_MAX_READ_LENGTH : (size - doff);
-				int r = sftp.read(file, offset + doff, data, doff, batch);
-				Log.v("SFTP", "pr: " + batch + "@" + (offset + doff) + "=" + r);
-				doff += r;
+			int read = 0;
+			while (read < size) {
+				int batch = (size - read) > OPENSSH_SFTP_MAX_READ_LENGTH ?
+					OPENSSH_SFTP_MAX_READ_LENGTH : (size - read);
+				int r = sftp.read(file, offset + read, data, read, batch);
+				Log.v("SFTP", "pr: " + batch + "@" + (offset + read) + "=" + r);
 				if (r == -1) {
-					return doff;
+					return read;
 				}
+				read += r;
 			}
 			return size;
 		});
