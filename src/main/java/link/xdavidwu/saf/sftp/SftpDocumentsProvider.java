@@ -38,6 +38,7 @@ import org.apache.sshd.common.SshConstants;
 import org.apache.sshd.common.util.io.PathUtils;
 import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.sshd.sftp.client.SftpClientFactory;
+import org.apache.sshd.sftp.client.extensions.SpaceAvailableExtension;
 import org.apache.sshd.sftp.client.extensions.openssh.OpenSSHStatPathExtension;
 import org.apache.sshd.sftp.common.SftpConstants;
 import org.apache.sshd.sftp.common.SftpException;
@@ -334,10 +335,21 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		var bytesInfo = mustIOWithCursor(result, () -> {
 			// unlike performQuery, connection/auth failure is not fatal here
 			var sftp = getClient();
-			// TODO consider space-available extension if supported
+			var path = pathFromDocumentId(documentId);
+
+			var spaceAvailable = sftp.getExtension(SpaceAvailableExtension.class);
+			if (spaceAvailable.isSupported()) {
+				var info = spaceAvailable.available(path);
+
+				return new Long[]{
+					info.bytesOnDevice,
+					info.bytesAvailableToUser
+				};
+			}
+
 			var statvfs = sftp.getExtension(OpenSSHStatPathExtension.class);
 			if (statvfs.isSupported()) {
-				var info = statvfs.stat(pathFromDocumentId(documentId));
+				var info = statvfs.stat(path);
 
 				return new Long[]{
 					info.f_blocks * info.f_frsize,
