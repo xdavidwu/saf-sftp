@@ -155,6 +155,12 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			sp.getString("username", ""),
 			sp.getString("passwd", "")
 		);
+		if (session != null) {
+			try {
+				session.close();
+			} catch (IOException e) {}
+		}
+		session = null;
 	};
 
 	private SftpClient getClient() throws IOException {
