@@ -38,6 +38,7 @@ import org.apache.sshd.common.SshConstants;
 import org.apache.sshd.common.util.io.PathUtils;
 import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.sshd.sftp.client.SftpClientFactory;
+import org.apache.sshd.sftp.client.extensions.openssh.OpenSSHStatPathExtension;
 import org.apache.sshd.sftp.common.SftpConstants;
 import org.apache.sshd.sftp.common.SftpException;
 
@@ -91,7 +92,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		Root.COLUMN_ICON,
 		Root.COLUMN_TITLE,
 		Root.COLUMN_DOCUMENT_ID,
-		Root.COLUMN_SUMMARY,
+		Root.COLUMN_CAPACITY_BYTES,
+		Root.COLUMN_AVAILABLE_BYTES,
 	};
 
 	private static final String[] DEFAULT_DOC_PROJECTION = new String[] {
@@ -329,6 +331,22 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		var documentId = documentIdFromPath(mountpoint);
 		var rootUri = getRootUri();
 
+		var bytesInfo = mustIOWithCursor(result, () -> {
+			// unlike performQuery, connection/auth failure is not fatal here
+			var sftp = getClient();
+			// TODO consider space-available extension if supported
+			var statvfs = sftp.getExtension(OpenSSHStatPathExtension.class);
+			if (statvfs.isSupported()) {
+				var info = statvfs.stat(pathFromDocumentId(documentId));
+
+				return new Long[]{
+					info.f_blocks * info.f_frsize,
+					info.f_bavail * info.f_frsize
+				};
+			}
+			return null;
+		}, DocumentsContract.EXTRA_INFO, "cannot statvfs: ").orElse(null);
+
 		// TODO make title, summary more useful
 		result.addRow(Arrays.stream(cols).map(c -> switch(c) {
 		case Root.COLUMN_ROOT_ID -> rootUri.toString();
@@ -336,7 +354,13 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		case Root.COLUMN_FLAGS -> Root.FLAG_SUPPORTS_IS_CHILD;
 		case Root.COLUMN_TITLE -> documentId;
 		case Root.COLUMN_ICON -> R.mipmap.sym_def_app_icon;
-		case Root.COLUMN_SUMMARY -> "SFTP with user: " + params.username();
+		// DocumentsUI shows localized and humanized COLUMN_AVAILABLE_BYTES
+		// when summary is not present, which is more useful and nicer
+		// case Root.COLUMN_SUMMARY -> "SFTP with user: " + params.username();
+		case Root.COLUMN_CAPACITY_BYTES ->
+			bytesInfo != null ? bytesInfo[0] : null;
+		case Root.COLUMN_AVAILABLE_BYTES ->
+			bytesInfo != null ? bytesInfo[1] : null;
 		default -> null;
 		}).toArray());
 
