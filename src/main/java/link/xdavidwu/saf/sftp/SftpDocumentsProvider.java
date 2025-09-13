@@ -322,14 +322,15 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 		var sp = PreferenceManager.getDefaultSharedPreferences(getContext());
 		var mountpoint = sp.getString("mountpoint", ".");
+		var root = mountpoint;
 		if (mountpoint.equals("") || mountpoint.equals(".")) {
-			mountpoint = HOME_IDENTIFIER;
+			root = HOME_IDENTIFIER;
 		} else if (mountpoint.startsWith("./")) {
-			mountpoint = HOME_IDENTIFIER + mountpoint.substring(1);
+			root = HOME_IDENTIFIER + mountpoint.substring(1);
 		} else if (!mountpoint.startsWith("/")) {
-			mountpoint = HOME_IDENTIFIER + "/" + mountpoint;
+			root = HOME_IDENTIFIER + "/" + mountpoint;
 		}
-		var documentId = documentIdFromPath(mountpoint);
+		var documentId = documentIdFromPath(root);
 		var rootUri = getRootUri();
 
 		var bytesInfo = mustIOWithCursor(result, () -> {
@@ -359,12 +360,12 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			return null;
 		}, DocumentsContract.EXTRA_INFO, "cannot statvfs: ").orElse(null);
 
-		// TODO make title, summary more useful
 		result.addRow(Arrays.stream(cols).map(c -> switch(c) {
 		case Root.COLUMN_ROOT_ID -> rootUri.toString();
 		case Root.COLUMN_DOCUMENT_ID -> documentId;
 		case Root.COLUMN_FLAGS -> Root.FLAG_SUPPORTS_IS_CHILD;
-		case Root.COLUMN_TITLE -> documentId;
+		case Root.COLUMN_TITLE ->
+			String.format("%s@%s:%s", params.username(), params.host(), mountpoint);
 		case Root.COLUMN_ICON -> R.mipmap.sym_def_app_icon;
 		// DocumentsUI shows localized and humanized COLUMN_AVAILABLE_BYTES
 		// when summary is not present, which is more useful and nicer
