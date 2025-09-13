@@ -43,6 +43,9 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 
 	// TODO consider sized ones
 	protected static final String XDG_THUMBNAIL_NORMAL_DIR = ".sh_thumbnails/normal/";
+	protected static final String[] XDG_THUMBNAIL_DIRS = {
+		XDG_THUMBNAIL_NORMAL_DIR
+	};
 
 	protected static MimeTypeMap mimeTypeMap = MimeTypeMap.getSingleton();
 	protected static String getTypeFromName(String filename) {
