@@ -22,14 +22,20 @@ import android.provider.DocumentsProvider;
 import android.widget.Toast;
 import android.util.Log;
 
+import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.nio.file.FileSystems;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.stream.StreamSupport;
 
 import org.apache.sshd.client.SshClient;
@@ -66,6 +72,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		}
 	}
 
+	protected record FsCreds(int uid, int gid, int[] supplementaryGroups) {}
+
 	private static final String HEARTBEAT_REQUEST = "keepalive@sftp.saf.xdavidwu.link";
 	private static SshClient ssh;
 	private ClientSession session;
@@ -76,6 +84,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	}
 	private ConnectionParams params;
 
+	private Future<FsCreds> fsCreds;
+
 	// do not start with a dot
 	// DocumentsUI identify hidden files by presence of /. in documentId
 	// (or display name starting with .)
@@ -84,6 +94,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	private StorageManager sm;
 	private Handler ioHandler;
 	private ToastThread lthread;
+	private ExecutorService threadPool = Executors.newCachedThreadPool();
 
 	private static final String TOAST_PREFIX = "SAF-SFTP: ";
 
@@ -113,7 +124,6 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		return params.getRootUri();
 	}
 
-	// use . as home, we don't show . it should be fine
 	@Override
 	protected String pathFromDocumentId(String documentId) {
 		var path = super.pathFromDocumentId(documentId);
@@ -161,9 +171,10 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			} catch (IOException e) {}
 		}
 		session = null;
+		fsCreds = null;
 	};
 
-	private SftpClient getClient() throws IOException {
+	private ClientSession ensureSession() throws IOException {
 		// /shrug if we are somehow invoked on main thread
 		StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.LAX);
 
@@ -177,8 +188,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			try {
 				session.request(HEARTBEAT_REQUEST, buf,
 					Duration.ofSeconds(10));
-				return SftpClientFactory.instance()
-					.createSftpClient(session);
+				return session;
 			} catch (IOException e) {
 				// try new session
 			}
@@ -186,7 +196,14 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			session = null;
 		}
 		session = params.connect();
-		return SftpClientFactory.instance().createSftpClient(session);
+		return session;
+	}
+
+	private SftpClient getClient() throws IOException {
+		// TODO consider allowing newer protocol without permission handling
+		// (or find some way to translate id/names)
+		return SftpClientFactory.instance()
+			.createSftpClient(ensureSession(), 3);
 	}
 
 	@Override
@@ -214,12 +231,70 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		}
 		var sftp = ioToUnchecked(this::getClient);
 		String filename = pathFromDocumentId(documentId);
-		Log.v("SFTP", "od " + documentId);
+		Log.v("SFTP", "od " + filename);
 		var file = ioToUnchecked(() -> sftp.open(filename));
 		return ioToUnchecked(() -> sm.openProxyFileDescriptor(
 			ParcelFileDescriptor.MODE_READ_ONLY,
 			new SftpProxyFileDescriptorCallback(sftp, file),
 			ioHandler));
+	}
+
+	private FsCreds resolveFsCreds() throws IOException {
+		// openDocument, ParcelFileDescriptor checks size, which is not
+		// friendly to /proc virtual files
+		try (var sftp = getClient()) {
+			try (var stream = sftp.read("/proc/self/status")) {
+				var reader = new BufferedReader(new InputStreamReader(stream));
+				var line = reader.readLine();
+				while (line != null) {
+					var parts = line.split("\t");
+					int uid = 0, gid = 0;
+					switch (parts[0]) {
+					case "Uid:":
+						uid = Integer.valueOf(parts[4]);
+						break;
+					case "Gid:":
+						gid = Integer.valueOf(parts[4]);
+						break;
+					case "Groups:":
+						return new FsCreds(uid, gid,
+							Arrays.stream(parts[1].split(" "))
+							.mapToInt(s -> Integer.valueOf(s)).toArray());
+					}
+					line = reader.readLine();
+				}
+			}
+		}
+		return null;
+	}
+
+	private void hoistFsCreds() {
+		if (fsCreds == null) {
+			fsCreds = threadPool.submit(this::resolveFsCreds);
+		}
+	}
+
+	private Optional<FsCreds> getFsCreds() {
+		try {
+			return Optional.of(fsCreds.get());
+		} catch (ExecutionException|InterruptedException e) {
+			toast("SFTP: Cannot resolve identity: " + e.getCause().getMessage());
+		}
+		return Optional.empty();
+	}
+
+	private int getModeBits(SftpClient.Attributes stat) {
+		var mode = stat.getPermissions();
+		return getFsCreds().map(creds ->
+			(creds.uid() == stat.getUserId() ? mode >> 6 :
+			creds.gid() == stat.getGroupId() ||
+				Arrays.asList(creds.supplementaryGroups())
+					.contains(stat.getGroupId()) ? mode >> 3 :
+			mode) & 7).orElse(7);
+	}
+
+	private boolean hasModeBit(SftpClient.Attributes stat, int bit) {
+		return (getModeBits(stat) & bit) == bit;
 	}
 
 	private Object[] getDocumentRow(SftpClient sftp, Cursor cursor,
@@ -240,10 +315,10 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		case Document.COLUMN_LAST_MODIFIED -> lstat.getModifyTime().toMillis();
 		case Document.COLUMN_FLAGS -> {
 			var flags = 0;
-			if (typeSupportsMetadata(type)) {
+			if (typeSupportsMetadata(type) && hasModeBit(stat, S_IR)) {
 				flags |= Document.FLAG_SUPPORTS_METADATA;
 			}
-			if (typeSupportsThumbnail(type)) {
+			if (typeSupportsThumbnail(type) && hasModeBit(stat, S_IR)) {
 				flags |= Document.FLAG_SUPPORTS_THUMBNAIL;
 			}
 			yield flags;
@@ -291,6 +366,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			throws FileNotFoundException {
 		var cols = projection != null ? projection : DEFAULT_DOC_PROJECTION;
 		var result = new MatrixCursor(cols);
+		hoistFsCreds();
 
 		return performQuery(result, sftp -> {
 			var filename = pathFromDocumentId(parentDocumentId);
@@ -313,6 +389,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			throws FileNotFoundException {
 		var cols = projection != null ? projection : DEFAULT_DOC_PROJECTION;
 		var result = new MatrixCursor(cols);
+		hoistFsCreds();
 
 		return performQuery(result, sftp -> {
 			var path = pathFromDocumentId(documentId);
