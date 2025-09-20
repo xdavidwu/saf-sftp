@@ -342,6 +342,9 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		case Document.COLUMN_LAST_MODIFIED -> lstat.getModifyTime().toMillis();
 		case Document.COLUMN_FLAGS -> {
 			var flags = 0;
+			if (stat.isSymbolicLink()) {
+				flags |= Document.FLAG_PARTIAL;
+			}
 			if (typeSupportsMetadata(type) && hasModeBit(stat, S_IR)) {
 				flags |= Document.FLAG_SUPPORTS_METADATA;
 			}
