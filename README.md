@@ -8,8 +8,15 @@
 
 ## Target
 
-This project uses SFTP v3 (-02 of the protocol draft), and is developed with OpenSSH and its sftp-server.
+This project uses SFTP v3 (-02 of the protocol draft), and is developed with OpenSSH and its `sftp-server`.
 
 This project also make use of the following SFTP extensions:
 
 (None so far)
+
+This project also make use of the following server host environment features:
+
+- DAC permission are considered on Linux
+	- e.g. for reporting if file may be deleted
+	- Relies on ability to read `/proc/self/status`
+	- On other cases, it is treated as having all permissions and accesses are attempted
