@@ -328,9 +328,15 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			String documentId, SftpClient.Attributes lstat) {
 		var name = basename(documentId);
 		var path = pathFromDocumentId(documentId);
-		var stat = lstat.isSymbolicLink() ? mustIOWithCursor(cursor,
-			() -> sftp.stat(path), DocumentsContract.EXTRA_INFO,
-			"Cannot stat " + name + ": ").orElse(lstat) : lstat;
+		var tmp = lstat;
+		if (lstat.isSymbolicLink()) {
+			try {
+				tmp = ioWithCursor(cursor,
+					() -> sftp.stat(path), DocumentsContract.EXTRA_INFO,
+					"Cannot stat " + name + ": ").orElse(lstat);
+			} catch (FileNotFoundException e) {}
+		}
+		final var stat = tmp;
 		var type = getType(stat.getPermissions(), name);
 
 		// TODO handle broken symlink
