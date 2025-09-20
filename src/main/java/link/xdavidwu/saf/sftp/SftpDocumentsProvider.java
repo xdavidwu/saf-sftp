@@ -53,6 +53,7 @@ import link.xdavidwu.saf.AbstractUnixLikeDocumentsProvider;
 import link.xdavidwu.saf.UncheckedAutoCloseable;
 
 public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
+	private static final String TAG = "SFTP";
 
 	protected record ConnectionParams(String host, int port,
 			String username, String password) {
@@ -245,7 +246,6 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		}
 		var sftp = ioToUnchecked(this::getClient);
 		String filename = pathFromDocumentId(documentId);
-		Log.v("SFTP", "od " + filename);
 		var file = ioToUnchecked(() -> sftp.open(filename));
 		return ioToUnchecked(() -> sm.openProxyFileDescriptor(
 			ParcelFileDescriptor.MODE_READ_ONLY,
@@ -297,6 +297,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			return Optional.of(fsCreds.get());
 		} catch (ExecutionException|InterruptedException e) {
 			toast("SFTP: Cannot resolve identity: " + e.getCause().getMessage());
+			Log.e(TAG, "cannot resolve identify", e);
 		}
 		return Optional.empty();
 	}
