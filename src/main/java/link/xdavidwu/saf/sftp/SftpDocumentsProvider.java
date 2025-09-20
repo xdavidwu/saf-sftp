@@ -72,7 +72,12 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		}
 	}
 
-	protected record FsCreds(int uid, int gid, int[] supplementaryGroups) {}
+	protected record FsCreds(int uid, int gid, int[] supplementaryGroups) {
+		public boolean hasGroup(int gid) {
+			return this.gid == gid ||
+				Arrays.asList(supplementaryGroups).contains(gid);
+		}
+	}
 
 	private static final String HEARTBEAT_REQUEST = "keepalive@sftp.saf.xdavidwu.link";
 	private static SshClient ssh;
@@ -287,9 +292,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		var mode = stat.getPermissions();
 		return getFsCreds().map(creds ->
 			(creds.uid() == stat.getUserId() ? mode >> 6 :
-			creds.gid() == stat.getGroupId() ||
-				Arrays.asList(creds.supplementaryGroups())
-					.contains(stat.getGroupId()) ? mode >> 3 :
+			creds.hasGroup(stat.getGroupId()) ? mode >> 3 :
 			mode) & 7).orElse(7);
 	}
 
