@@ -72,10 +72,20 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		}
 	}
 
-	protected record FsCreds(int uid, int gid, int[] supplementaryGroups) {
+	protected record FsCreds(
+			int uid, int gid, int[] supplementaryGroups,
+			long effectiveCapabilities) {
+		public static final int CAP_DAC_OVERRIDE = 1;
+		public static final int CAP_DAC_READ_SEARCH = 2;
+
 		public boolean hasGroup(int gid) {
 			return this.gid == gid ||
 				Arrays.asList(supplementaryGroups).contains(gid);
+		}
+
+		public boolean hasCapability(int cap) {
+			var mask = 1l << cap;
+			return (effectiveCapabilities & mask) == mask;
 		}
 	}
 
@@ -254,6 +264,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 				while (line != null) {
 					var parts = line.split("\t");
 					int uid = 0, gid = 0;
+					int[] groups = null;
 					switch (parts[0]) {
 					case "Uid:":
 						uid = Integer.valueOf(parts[4]);
@@ -262,9 +273,12 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 						gid = Integer.valueOf(parts[4]);
 						break;
 					case "Groups:":
-						return new FsCreds(uid, gid,
-							Arrays.stream(parts[1].split(" "))
-							.mapToInt(s -> Integer.valueOf(s)).toArray());
+						groups = Arrays.stream(parts[1].split(" "))
+							.mapToInt(s -> Integer.valueOf(s)).toArray();
+						break;
+					case "CapEff:":
+						return new FsCreds(uid, gid, groups,
+							Long.parseUnsignedLong(parts[1], 16));
 					}
 					line = reader.readLine();
 				}
@@ -290,10 +304,20 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 	private int getModeBits(SftpClient.Attributes stat) {
 		var mode = stat.getPermissions();
-		return getFsCreds().map(creds ->
-			(creds.uid() == stat.getUserId() ? mode >> 6 :
-			creds.hasGroup(stat.getGroupId()) ? mode >> 3 :
-			mode) & 7).orElse(7);
+		return getFsCreds().map(creds -> {
+			if (creds.hasCapability(FsCreds.CAP_DAC_OVERRIDE)) {
+				return 7;
+			}
+			var bits = (
+				creds.uid() == stat.getUserId() ? mode >> 6 :
+				creds.hasGroup(stat.getGroupId()) ? mode >> 3 :
+				mode
+			) & 7;
+			if (creds.hasCapability(FsCreds.CAP_DAC_READ_SEARCH)) {
+				bits |= S_IR & S_IX;
+			}
+			return bits;
+		}).orElse(7);
 	}
 
 	private boolean hasModeBit(SftpClient.Attributes stat, int bit) {
