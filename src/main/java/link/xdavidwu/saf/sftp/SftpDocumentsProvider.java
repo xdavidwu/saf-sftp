@@ -108,10 +108,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 	private StorageManager sm;
 	private Handler ioHandler;
-	private ToastThread lthread;
+	private Handler toastHandler;
 	private ExecutorService threadPool = Executors.newCachedThreadPool();
-
-	private static final String TOAST_PREFIX = "SAF-SFTP: ";
 
 	private static final String[] DEFAULT_ROOT_PROJECTION = new String[] {
 		Root.COLUMN_ROOT_ID,
@@ -167,9 +165,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	}
 
 	private void toast(String msg) {
-		Message m = lthread.handler.obtainMessage();
-		m.obj = TOAST_PREFIX + msg;
-		lthread.handler.sendMessage(m);
+		toastHandler.sendMessage(toastHandler.obtainMessage(0, msg));
 	}
 
 	private SharedPreferences.OnSharedPreferenceChangeListener loadConfig =
@@ -224,11 +220,14 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	@Override
 	public boolean onCreate() {
 		sm = (StorageManager) getContext().getSystemService(Context.STORAGE_SERVICE);
-		lthread = new ToastThread(getContext());
-		lthread.start();
-		HandlerThread ioThread = new HandlerThread("IO thread");
+		var ioThread = new HandlerThread("IO thread");
 		ioThread.start();
 		ioHandler = new Handler(ioThread.getLooper());
+		toastHandler = new Handler(Looper.getMainLooper(), msg -> {
+			Toast.makeText(getContext(), "SAF-SFTP: " + msg.obj.toString(),
+				Toast.LENGTH_LONG).show();
+			return true;
+		});
 
 		var sp = PreferenceManager.getDefaultSharedPreferences(getContext());
 		sp.registerOnSharedPreferenceChangeListener(loadConfig);
