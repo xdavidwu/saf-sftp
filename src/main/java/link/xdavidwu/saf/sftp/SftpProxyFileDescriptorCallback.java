@@ -8,6 +8,7 @@ import android.util.Log;
 import java.io.IOException;
 
 import org.apache.sshd.sftp.client.SftpClient;
+import org.apache.sshd.sftp.client.extensions.openssh.OpenSSHFsyncExtension;
 import org.apache.sshd.sftp.common.SftpConstants;
 import org.apache.sshd.sftp.common.SftpException;
 
@@ -86,6 +87,18 @@ public class SftpProxyFileDescriptorCallback
 		return io("write", () -> {
 			sftp.write(file, offset, data, 0, size);
 			return size;
+		});
+	}
+
+	@Override
+	public void onFsync() throws ErrnoException {
+		var fsync = sftp.getExtension(OpenSSHFsyncExtension.class);
+		if (!fsync.isSupported()) {
+			throw new ErrnoException("fsync", OsConstants.EOPNOTSUPP);
+		}
+		io("fsync", () -> {
+			fsync.fsync(file);
+			return 0;
 		});
 	}
 
