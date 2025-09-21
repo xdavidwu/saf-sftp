@@ -28,7 +28,10 @@ import java.io.UncheckedIOException;
 import java.nio.file.FileSystems;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -234,32 +237,37 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		return true;
 	}
 
+	private static final Map<Integer, SftpClient.OpenMode> MODE_MAPPING = new HashMap<>();
+	static {
+		MODE_MAPPING.put(ParcelFileDescriptor.MODE_READ_ONLY, SftpClient.OpenMode.Read);
+		MODE_MAPPING.put(ParcelFileDescriptor.MODE_WRITE_ONLY, SftpClient.OpenMode.Write);
+		MODE_MAPPING.put(ParcelFileDescriptor.MODE_APPEND, SftpClient.OpenMode.Append);
+		MODE_MAPPING.put(ParcelFileDescriptor.MODE_TRUNCATE, SftpClient.OpenMode.Truncate);
+		MODE_MAPPING.put(ParcelFileDescriptor.MODE_CREATE, SftpClient.OpenMode.Create);
+	}
+
 	@Override
 	public ParcelFileDescriptor openDocument(String documentId, String mode,
 			CancellationSignal cancellationSignal)
 			throws FileNotFoundException {
-		List<SftpClient.OpenMode> sftpMode;
-		int parcelFileDescriptorMode;
-		switch (mode) {
-		case "r":
-			sftpMode = List.of(SftpClient.OpenMode.Read);
-			parcelFileDescriptorMode = ParcelFileDescriptor.MODE_READ_ONLY;
-			break;
-		case "w":
-			sftpMode = List.of(SftpClient.OpenMode.Write);
-			parcelFileDescriptorMode = ParcelFileDescriptor.MODE_WRITE_ONLY;
-			break;
-		case "rw":
-			sftpMode = List.of(SftpClient.OpenMode.Read, SftpClient.OpenMode.Write);
-			parcelFileDescriptorMode = ParcelFileDescriptor.MODE_READ_WRITE;
-			break;
-		default:
+		int parcelFileDescriptorMode = ParcelFileDescriptor.parseMode(mode);
+		var sftpModes = new HashSet<SftpClient.OpenMode>();
+		int[] remainingBits = {parcelFileDescriptorMode};
+		MODE_MAPPING.forEach((bit, sftpMode) -> {
+			if ((remainingBits[0] & bit) == bit) {
+				sftpModes.add(sftpMode);
+				remainingBits[0] ^= bit;
+			}
+		});
+
+		if (remainingBits[0] != 0) {
 			throw new UnsupportedOperationException(
 				"Mode " + mode + " is not supported yet.");
 		}
+
 		var sftp = ioToUnchecked(this::getClient);
 		String filename = pathFromDocumentId(documentId);
-		var file = ioToUnchecked(() -> sftp.open(filename, sftpMode));
+		var file = ioToUnchecked(() -> sftp.open(filename, sftpModes));
 		return ioToUnchecked(() -> sm.openProxyFileDescriptor(
 			parcelFileDescriptorMode,
 			new SftpProxyFileDescriptorCallback(sftp, file),
