@@ -473,27 +473,28 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 		var bytesInfo = mustIOWithCursor(result, () -> {
 			// unlike performQuery, connection/auth failure is not fatal here
-			var sftp = getClient();
-			var path = pathFromDocumentId(documentId);
+			try (var sftp = getClient()) {
+				var path = pathFromDocumentId(documentId);
 
-			var spaceAvailable = sftp.getExtension(SpaceAvailableExtension.class);
-			if (spaceAvailable.isSupported()) {
-				var info = spaceAvailable.available(path);
+				var spaceAvailable = sftp.getExtension(SpaceAvailableExtension.class);
+				if (spaceAvailable.isSupported()) {
+					var info = spaceAvailable.available(path);
 
-				return new Long[]{
-					info.bytesOnDevice,
-					info.bytesAvailableToUser
-				};
-			}
+					return new Long[]{
+						info.bytesOnDevice,
+						info.bytesAvailableToUser
+					};
+				}
 
-			var statvfs = sftp.getExtension(OpenSSHStatPathExtension.class);
-			if (statvfs.isSupported()) {
-				var info = statvfs.stat(path);
+				var statvfs = sftp.getExtension(OpenSSHStatPathExtension.class);
+				if (statvfs.isSupported()) {
+					var info = statvfs.stat(path);
 
-				return new Long[]{
-					info.f_blocks * info.f_frsize,
-					info.f_bavail * info.f_frsize
-				};
+					return new Long[]{
+						info.f_blocks * info.f_frsize,
+						info.f_bavail * info.f_frsize
+					};
+				}
 			}
 			return null;
 		}, DocumentsContract.EXTRA_INFO, "cannot statvfs: ").orElse(null);
