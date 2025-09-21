@@ -81,6 +81,15 @@ public class SftpProxyFileDescriptorCallback
 	}
 
 	@Override
+	public int onWrite(long offset, int size, byte[] data)
+			throws ErrnoException {
+		return io("write", () -> {
+			sftp.write(file, offset, data, 0, size);
+			return size;
+		});
+	}
+
+	@Override
 	public void onRelease() {
 		try {
 			sftp.close(file);

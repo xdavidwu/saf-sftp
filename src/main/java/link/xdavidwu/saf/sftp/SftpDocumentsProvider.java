@@ -238,15 +238,30 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	public ParcelFileDescriptor openDocument(String documentId, String mode,
 			CancellationSignal cancellationSignal)
 			throws FileNotFoundException {
-		if (!"r".equals(mode)) {
+		List<SftpClient.OpenMode> sftpMode;
+		int parcelFileDescriptorMode;
+		switch (mode) {
+		case "r":
+			sftpMode = List.of(SftpClient.OpenMode.Read);
+			parcelFileDescriptorMode = ParcelFileDescriptor.MODE_READ_ONLY;
+			break;
+		case "w":
+			sftpMode = List.of(SftpClient.OpenMode.Write);
+			parcelFileDescriptorMode = ParcelFileDescriptor.MODE_WRITE_ONLY;
+			break;
+		case "rw":
+			sftpMode = List.of(SftpClient.OpenMode.Read, SftpClient.OpenMode.Write);
+			parcelFileDescriptorMode = ParcelFileDescriptor.MODE_READ_WRITE;
+			break;
+		default:
 			throw new UnsupportedOperationException(
 				"Mode " + mode + " is not supported yet.");
 		}
 		var sftp = ioToUnchecked(this::getClient);
 		String filename = pathFromDocumentId(documentId);
-		var file = ioToUnchecked(() -> sftp.open(filename));
+		var file = ioToUnchecked(() -> sftp.open(filename, sftpMode));
 		return ioToUnchecked(() -> sm.openProxyFileDescriptor(
-			ParcelFileDescriptor.MODE_READ_ONLY,
+			parcelFileDescriptorMode,
 			new SftpProxyFileDescriptorCallback(sftp, file),
 			ioHandler));
 	}
@@ -354,6 +369,9 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			}
 			if (typeSupportsThumbnail(type) && hasModeBit(stat, S_IR)) {
 				flags |= Document.FLAG_SUPPORTS_THUMBNAIL;
+			}
+			if (stat.isRegularFile() && hasModeBit(stat, S_IW)) {
+				flags |= Document.FLAG_SUPPORTS_WRITE;
 			}
 			yield flags;
 		}
