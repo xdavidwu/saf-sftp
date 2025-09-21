@@ -12,7 +12,10 @@ This project uses SFTP v3 (-02 of the protocol draft), and is developed with Ope
 
 This project also make use of the following SFTP extensions:
 
-(None so far)
+- `space-available` or `statvfs@openssh.com`
+	- To report capacity of roots, if available
+- `fsync@openssh.com`
+	- For fsync opened files, if available
 
 This project also make use of the following server host environment features:
 
