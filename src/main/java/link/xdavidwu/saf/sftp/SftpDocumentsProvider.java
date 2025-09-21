@@ -1,6 +1,5 @@
 package link.xdavidwu.saf.sftp;
 
-import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.MatrixCursor;
@@ -10,7 +9,6 @@ import android.os.CancellationSignal;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
-import android.os.Message;
 import android.os.ParcelFileDescriptor;
 import android.os.storage.StorageManager;
 import android.os.StrictMode;
@@ -220,7 +218,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 	@Override
 	public boolean onCreate() {
-		sm = (StorageManager) getContext().getSystemService(Context.STORAGE_SERVICE);
+		sm = getContext().getSystemService(StorageManager.class);
 		var ioThread = new HandlerThread("IO thread");
 		ioThread.start();
 		ioHandler = new Handler(ioThread.getLooper());
