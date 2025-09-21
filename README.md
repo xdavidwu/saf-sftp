@@ -2,9 +2,12 @@
 
 [WIP] Access SFTP from Android Storage Access Framework (SAF)
 
-## Status
+## Implemented features
 
-* Read operations implemented
+- Traverse tree, including symlinks
+- Read and write files
+- Media metadata extraction
+- Thumbnails from EXIF
 
 ## Target
 
