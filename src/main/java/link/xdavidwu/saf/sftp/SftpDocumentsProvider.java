@@ -28,8 +28,8 @@ import java.io.UncheckedIOException;
 import java.nio.file.FileSystems;
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -237,13 +237,14 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		return true;
 	}
 
-	private static final Map<Integer, SftpClient.OpenMode> MODE_MAPPING = new HashMap<>();
+	private static final Map<SftpClient.OpenMode, Integer> MODE_MAPPING = new EnumMap<>(SftpClient.OpenMode.class);
 	static {
-		MODE_MAPPING.put(ParcelFileDescriptor.MODE_READ_ONLY, SftpClient.OpenMode.Read);
-		MODE_MAPPING.put(ParcelFileDescriptor.MODE_WRITE_ONLY, SftpClient.OpenMode.Write);
-		MODE_MAPPING.put(ParcelFileDescriptor.MODE_APPEND, SftpClient.OpenMode.Append);
-		MODE_MAPPING.put(ParcelFileDescriptor.MODE_TRUNCATE, SftpClient.OpenMode.Truncate);
-		MODE_MAPPING.put(ParcelFileDescriptor.MODE_CREATE, SftpClient.OpenMode.Create);
+		MODE_MAPPING.put(SftpClient.OpenMode.Read, ParcelFileDescriptor.MODE_READ_ONLY);
+		MODE_MAPPING.put(SftpClient.OpenMode.Write, ParcelFileDescriptor.MODE_WRITE_ONLY);
+		// MODE_READ_WRITE is OR of above
+		MODE_MAPPING.put(SftpClient.OpenMode.Append, ParcelFileDescriptor.MODE_APPEND);
+		MODE_MAPPING.put(SftpClient.OpenMode.Truncate, ParcelFileDescriptor.MODE_TRUNCATE);
+		MODE_MAPPING.put(SftpClient.OpenMode.Create, ParcelFileDescriptor.MODE_CREATE);
 	}
 
 	@Override
@@ -251,9 +252,9 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			CancellationSignal cancellationSignal)
 			throws FileNotFoundException {
 		int parcelFileDescriptorMode = ParcelFileDescriptor.parseMode(mode);
-		var sftpModes = new HashSet<SftpClient.OpenMode>();
+		var sftpModes = EnumSet.noneOf(SftpClient.OpenMode.class);
 		int[] remainingBits = {parcelFileDescriptorMode};
-		MODE_MAPPING.forEach((bit, sftpMode) -> {
+		MODE_MAPPING.forEach((sftpMode, bit) -> {
 			if ((remainingBits[0] & bit) == bit) {
 				sftpModes.add(sftpMode);
 				remainingBits[0] ^= bit;
