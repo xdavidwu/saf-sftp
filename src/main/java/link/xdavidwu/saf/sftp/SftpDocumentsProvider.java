@@ -33,10 +33,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.StreamSupport;
 
 import org.apache.sshd.client.SshClient;
@@ -101,7 +98,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	}
 	private ConnectionParams params;
 
-	private Future<FsCreds> fsCreds;
+	private CompletableFuture<Optional<FsCreds>> fsCreds;
 
 	// do not start with a dot
 	// DocumentsUI identify hidden files by presence of /. in documentId
@@ -111,7 +108,6 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	private StorageManager sm;
 	private Handler ioHandler;
 	private Handler toastHandler;
-	private ExecutorService threadPool = Executors.newCachedThreadPool();
 
 	private static final String[] DEFAULT_ROOT_PROJECTION = new String[] {
 		Root.COLUMN_ROOT_ID,
@@ -310,23 +306,21 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 	private void hoistFsCreds() {
 		if (fsCreds == null) {
-			fsCreds = threadPool.submit(this::resolveFsCreds);
+			fsCreds = CompletableFuture.supplyAsync(() -> {
+				try {
+					return Optional.of(resolveFsCreds());
+				} catch (IOException e) {
+					toast("SFTP: Cannot resolve identity: " + e.getMessage());
+					Log.e(TAG, "cannot resolve identify", e);
+				}
+				return Optional.empty();
+			});
 		}
-	}
-
-	private Optional<FsCreds> getFsCreds() {
-		try {
-			return Optional.of(fsCreds.get());
-		} catch (ExecutionException|InterruptedException e) {
-			toast("SFTP: Cannot resolve identity: " + e.getCause().getMessage());
-			Log.e(TAG, "cannot resolve identify", e);
-		}
-		return Optional.empty();
 	}
 
 	private int getModeBits(SftpClient.Attributes stat) {
 		var mode = stat.getPermissions();
-		return getFsCreds().map(creds -> {
+		return fsCreds.join().map(creds -> {
 			if (creds.hasCapability(FsCreds.CAP_DAC_OVERRIDE)) {
 				return 7;
 			}
