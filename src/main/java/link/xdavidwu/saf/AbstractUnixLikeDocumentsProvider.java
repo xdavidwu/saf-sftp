@@ -295,13 +295,13 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 
 	protected <T> Optional<T> ioWithCursor(Cursor c, IOOperation<T> o,
 			String extraKey, String prefix) throws FileNotFoundException {
-		return io(() -> Optional.of(o.execute()),
+		return io(() -> Optional.ofNullable(o.execute()),
 			handleIOEViaCursor(c, extraKey, prefix));
 	}
 
 	protected <T> Optional<T> mustIOWithCursor(Cursor c, IOOperation<T> o,
 			String extraKey, String prefix) {
-		return mustIO(() -> Optional.of(o.execute()),
+		return mustIO(() -> Optional.ofNullable(o.execute()),
 			handleIOEViaCursor(c, extraKey, prefix));
 	}
 
