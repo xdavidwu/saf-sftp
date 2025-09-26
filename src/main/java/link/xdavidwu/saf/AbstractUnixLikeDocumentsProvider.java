@@ -328,24 +328,24 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 	}
 
 	// Helpers for ioWithCursor, to short circuit out with
-	// ioWithCursor().orElseThrow(this::haltIt)
-	protected class HaltWithCursorException extends Exception {
+	// ioWithCursor().orElseThrow(this::abortQuery)
+	protected class AbortWithCursorException extends Exception {
 		public static final long serialVersionUID = 42;
 	}
-	protected HaltWithCursorException haltIt() {
-		return new HaltWithCursorException();
+	protected AbortWithCursorException abortQuery() {
+		return new AbortWithCursorException();
 	}
 
 	protected interface QueryOperation {
 		public void execute()
-			throws FileNotFoundException, HaltWithCursorException;
+			throws FileNotFoundException, AbortWithCursorException;
 	}
 
 	protected Cursor performQuery(Cursor c, QueryOperation o)
 			throws FileNotFoundException {
 		try {
 			o.execute();
-		} catch (HaltWithCursorException e) {
+		} catch (AbortWithCursorException e) {
 		}
 		return c;
 	}
