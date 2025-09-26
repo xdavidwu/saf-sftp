@@ -402,7 +402,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 	protected interface SftpQueryOperation {
 		public void execute(SftpClient sftp)
-			throws FileNotFoundException, HaltWithCursorException;
+			throws FileNotFoundException, AbortWithCursorException;
 	}
 
 	protected Cursor performQuery(Cursor c, SftpQueryOperation o)
@@ -410,7 +410,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		return performQuery(c, () -> {
 			try (var sftp = new UncheckedAutoCloseable<SftpClient>(
 					ioWithCursor(c, this::getClient)
-					.orElseThrow(this::haltIt))) {
+					.orElseThrow(this::abortQuery))) {
 				o.execute(sftp.c());
 			}
 		});
@@ -428,7 +428,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			// lazy until iterator creation, openDir at iterator
 			var entries = ioWithCursor(result,
 				() -> sftp.readDir(filename).spliterator())
-					.orElseThrow(this::haltIt);
+					.orElseThrow(this::abortQuery);
 
 			StreamSupport.stream(entries, false)
 				.filter(entry -> !List.of(".", "..").contains(entry.getFilename()))
@@ -449,7 +449,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		return performQuery(result, sftp -> {
 			var path = pathFromDocumentId(documentId);
 			var stat = ioWithCursor(result, () -> sftp.lstat(path))
-				.orElseThrow(this::haltIt);
+				.orElseThrow(this::abortQuery);
 			result.addRow(getDocumentRow(sftp, result, documentId, stat));
 		});
 	}
