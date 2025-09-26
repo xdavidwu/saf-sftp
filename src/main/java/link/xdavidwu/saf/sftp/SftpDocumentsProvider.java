@@ -330,7 +330,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 				mode
 			) & 7;
 			if (creds.hasCapability(FsCreds.CAP_DAC_READ_SEARCH)) {
-				bits |= S_IR & S_IX;
+				bits |= S_IR | S_IX;
 			}
 			return bits;
 		}).orElse(7);
