@@ -272,6 +272,32 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			ioHandler));
 	}
 
+	@Override
+	public String createDocument(String parentDocumentId, String mimeType,
+			String displayName) throws FileNotFoundException {
+		var parent = pathFromDocumentId(parentDocumentId);
+		if (Document.MIME_TYPE_DIR.equals(mimeType)) {
+			ioToUnchecked(() -> {
+				try (var sftp = getClient()) {
+					sftp.mkdir(parent + "/" + displayName);
+				}
+				return null;
+			});
+		} else {
+			ioToUnchecked(() -> {
+				try (var sftp = getClient()) {
+					sftp.close(
+						sftp.open(parent + "/" + displayName,
+							SftpClient.OpenMode.Create,
+							SftpClient.OpenMode.Exclusive));
+				}
+				return null;
+			});
+		}
+		// TODO notify child change
+		return parent + "/" + displayName;
+	}
+
 	private FsCreds resolveFsCreds() throws IOException {
 		// openDocument, ParcelFileDescriptor checks size, which is not
 		// friendly to /proc virtual files
@@ -366,6 +392,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		case Document.COLUMN_LAST_MODIFIED -> lstat.getModifyTime().toMillis();
 		case Document.COLUMN_FLAGS -> switch (stat.getPermissions() & S_IFMT) {
 			case S_IFLNK -> Document.FLAG_PARTIAL;
+			case S_IFDIR -> hasModeBit(stat, S_IW | S_IX) ?
+				Document.FLAG_DIR_SUPPORTS_CREATE : 0;
 			case S_IFREG -> {
 				var flags = hasModeBit(stat, S_IW) ?
 					Document.FLAG_SUPPORTS_WRITE : 0;
@@ -521,7 +549,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		result.addRow(Arrays.stream(cols).map(c -> switch(c) {
 		case Root.COLUMN_ROOT_ID -> rootUri.toString();
 		case Root.COLUMN_DOCUMENT_ID -> documentId;
-		case Root.COLUMN_FLAGS -> Root.FLAG_SUPPORTS_IS_CHILD;
+		case Root.COLUMN_FLAGS ->
+			Root.FLAG_SUPPORTS_IS_CHILD | Root.FLAG_SUPPORTS_CREATE;
 		case Root.COLUMN_TITLE ->
 			String.format("%s@%s:%s", params.username(), params.host(), mountpoint);
 		case Root.COLUMN_ICON -> R.mipmap.sym_def_app_icon;
