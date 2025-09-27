@@ -317,7 +317,16 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 		var sftp = ioToUnchecked(() -> getClient(signal));
 		String filename = pathFromDocumentId(documentId);
-		var file = ioToUnchecked(() -> sftp.open(filename, sftpModes));
+		SftpClient.CloseableHandle file;
+		try {
+			file = ioToUnchecked(() -> sftp.open(filename, sftpModes));
+		} catch (FileNotFoundException|UncheckedIOException e) {
+			try {
+				sftp.close();
+			} catch (IOException e2) {}
+			throw e;
+		}
+
 		return ioToUnchecked(() -> sm.openProxyFileDescriptor(
 			parcelFileDescriptorMode,
 			new SftpProxyFileDescriptorCallback(sftp, file),
