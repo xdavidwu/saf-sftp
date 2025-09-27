@@ -106,6 +106,7 @@ public class SftpProxyFileDescriptorCallback
 	public void onRelease() {
 		try {
 			sftp.close(file);
+			sftp.close();
 		} catch (IOException e) {
 		}
 	}
