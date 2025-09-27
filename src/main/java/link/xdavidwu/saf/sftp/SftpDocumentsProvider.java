@@ -35,11 +35,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.StreamSupport;
 
 import org.apache.sshd.client.SshClient;
 import org.apache.sshd.client.session.ClientSession;
 import org.apache.sshd.common.SshConstants;
+import org.apache.sshd.common.SshException;
+import org.apache.sshd.common.channel.Channel;
+import org.apache.sshd.common.channel.ChannelListener;
+import org.apache.sshd.common.channel.exception.SshChannelOpenException;
 import org.apache.sshd.common.util.io.PathUtils;
 import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.sshd.sftp.client.SftpClientFactory;
@@ -86,6 +91,20 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		public boolean hasCapability(int cap) {
 			var mask = 1l << cap;
 			return (effectiveCapabilities & mask) == mask;
+		}
+	}
+
+	protected static class ChannelClosedFutureAdaptor implements ChannelListener {
+		private CompletableFuture<Void> future = new CompletableFuture<>();
+
+		@Override
+		public void channelClosed(Channel c, Throwable r) {
+			Log.i(TAG, "channel released");
+			future.complete(null);
+		}
+
+		public CompletableFuture<Void> future() {
+			return future;
 		}
 	}
 
@@ -209,11 +228,38 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		return session;
 	}
 
-	private SftpClient getClient() throws IOException {
-		// TODO consider allowing newer protocol without permission handling
-		// (or find some way to translate id/names)
-		return SftpClientFactory.instance()
-			.createSftpClient(ensureSession(), 3);
+	// TODO support cancellation
+	private synchronized SftpClient getClient() throws IOException {
+		var session = ensureSession();
+		var retries = 3;
+		while (true) {
+			try {
+				// TODO consider allowing newer protocol without permission handling
+				// (or find some way to translate id/names)
+				return SftpClientFactory.instance()
+					.createSftpClient(session, 3);
+			} catch (SshException e) {
+				var c = e.getCause();
+				if (c instanceof SshChannelOpenException s) {
+					var code = s.getReasonCode();
+					// openssh uses SSH_OPEN_CONNECT_FAILED
+					var temporary = code == SshConstants.SSH_OPEN_CONNECT_FAILED ||
+						code == SshConstants.SSH_OPEN_RESOURCE_SHORTAGE;
+					if (temporary && retries-- != 0) {
+						Log.i(TAG, "temporary open channel failure (hitting concurrent channels limit on server?), waiting for any existing channel to close");
+
+						var adaptor = new ChannelClosedFutureAdaptor();
+						session.addChannelListener(adaptor);
+						adaptor.future()
+							.completeOnTimeout(null, 1, TimeUnit.SECONDS)
+							.join();
+						session.removeChannelListener(adaptor);
+						continue;
+					}
+				}
+				throw e;
+			}
+		}
 	}
 
 	@Override
