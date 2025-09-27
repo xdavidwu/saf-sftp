@@ -166,7 +166,7 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		}
 
 		if (Build.VERSION.SDK_INT >= 30 && ExifInterface.isSupportedMimeType(getDocumentType(documentId))) {
-			ParcelFileDescriptor fd = openDocument(documentId, "r", null);
+			ParcelFileDescriptor fd = openDocument(documentId, "r", signal);
 
 			var stream = new AutoCloseInputStream(fd);
 
