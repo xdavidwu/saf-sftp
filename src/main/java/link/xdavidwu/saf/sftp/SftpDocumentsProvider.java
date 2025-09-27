@@ -279,10 +279,10 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			try (var stream = sftp.read("/proc/self/status")) {
 				var reader = new BufferedReader(new InputStreamReader(stream));
 				var line = reader.readLine();
+				int uid = 0, gid = 0;
+				int[] groups = null;
 				while (line != null) {
 					var parts = line.split("\t");
-					int uid = 0, gid = 0;
-					int[] groups = null;
 					switch (parts[0]) {
 					case "Uid:":
 						uid = Integer.valueOf(parts[4]);
