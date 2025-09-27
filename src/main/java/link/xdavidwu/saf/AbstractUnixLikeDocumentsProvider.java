@@ -277,6 +277,8 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 	private <T> Function<IOException, Optional<T>> handleIOEViaCursor (
 			Cursor c, String extraKey, String prefix) {
 		return e -> {
+			Log.e(LOG_NAME, "reporting error with cursor: ", e);
+
 			var extras = c.getExtras();
 			if (extras == Bundle.EMPTY) {
 				extras = new Bundle();
