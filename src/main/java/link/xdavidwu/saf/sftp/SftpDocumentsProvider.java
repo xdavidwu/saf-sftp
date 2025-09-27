@@ -33,6 +33,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.StreamSupport;
 
@@ -341,7 +342,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	}
 
 	private Object[] getDocumentRow(SftpClient sftp, Cursor cursor,
-			String documentId, SftpClient.Attributes lstat) {
+			String documentId, SftpClient.Attributes lstat,
+			SftpClient.Attributes parentStat) {
 		var name = basename(documentId);
 		var path = pathFromDocumentId(documentId);
 		var tmp = lstat;
@@ -425,17 +427,26 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 		return performQuery(result, sftp -> {
 			var filename = pathFromDocumentId(parentDocumentId);
-			// lazy until iterator creation, openDir at iterator
 			var entries = ioWithCursor(result,
-				() -> sftp.readDir(filename).spliterator())
+				() -> sftp.readEntries(filename))
 					.orElseThrow(this::abortQuery);
 
-			StreamSupport.stream(entries, false)
+			// protocol doesn't really say anything about . or ..
+			var parentStat = entries.stream()
+				.filter(entry -> ".".equals(entry.getFilename()))
+				.findFirst().map(entry -> entry.getAttributes())
+				.orElseGet(() -> {
+					Log.i(TAG, "server does not send .");
+
+					return mustIOToUnchecked(() -> sftp.stat(filename));
+				});
+
+			entries.stream()
 				.filter(entry -> !List.of(".", "..").contains(entry.getFilename()))
 				.map(entry -> {
 					var documentId = parentDocumentId + '/' + entry.getFilename();
 					return getDocumentRow(sftp, result, documentId,
-							entry.getAttributes());
+							entry.getAttributes(), parentStat);
 				}).forEach(row -> result.addRow(row));
 		});
 	}
@@ -450,7 +461,14 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 			var path = pathFromDocumentId(documentId);
 			var stat = ioWithCursor(result, () -> sftp.lstat(path))
 				.orElseThrow(this::abortQuery);
-			result.addRow(getDocumentRow(sftp, result, documentId, stat));
+
+			var dirIndex = path.lastIndexOf("/");
+			var parentPath = dirIndex != -1 ? path.substring(0, dirIndex + 1) : ".";
+			var parentStat = ioWithCursor(result,
+					() -> sftp.stat(parentPath))
+				.orElseThrow(this::abortQuery);
+
+			result.addRow(getDocumentRow(sftp, result, documentId, stat, parentStat));
 		});
 	}
 
