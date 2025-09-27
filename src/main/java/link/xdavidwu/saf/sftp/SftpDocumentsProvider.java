@@ -364,22 +364,23 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		case Document.COLUMN_MIME_TYPE -> type;
 		case Document.COLUMN_SIZE -> lstat.getSize();
 		case Document.COLUMN_LAST_MODIFIED -> lstat.getModifyTime().toMillis();
-		case Document.COLUMN_FLAGS -> {
-			var flags = 0;
-			if (stat.isSymbolicLink()) {
-				flags |= Document.FLAG_PARTIAL;
+		case Document.COLUMN_FLAGS -> switch (stat.getPermissions() & S_IFMT) {
+			case S_IFLNK -> Document.FLAG_PARTIAL;
+			case S_IFREG -> {
+				var flags = hasModeBit(stat, S_IW) ?
+					Document.FLAG_SUPPORTS_WRITE : 0;
+				if (hasModeBit(stat, S_IR)) {
+					if (typeSupportsMetadata(type)) {
+						flags |= Document.FLAG_SUPPORTS_METADATA;
+					}
+					if (typeSupportsThumbnail(type)) {
+						flags |= Document.FLAG_SUPPORTS_THUMBNAIL;
+					}
+				}
+				yield flags;
 			}
-			if (typeSupportsMetadata(type) && hasModeBit(stat, S_IR)) {
-				flags |= Document.FLAG_SUPPORTS_METADATA;
-			}
-			if (typeSupportsThumbnail(type) && hasModeBit(stat, S_IR)) {
-				flags |= Document.FLAG_SUPPORTS_THUMBNAIL;
-			}
-			if (stat.isRegularFile() && hasModeBit(stat, S_IW)) {
-				flags |= Document.FLAG_SUPPORTS_WRITE;
-			}
-			yield flags;
-		}
+			default -> 0;
+			};
 		case Document.COLUMN_ICON -> {
 			if (lstat.isSymbolicLink() && stat.isDirectory()) {
 				// DocumentsUI grid view is hard-coded to system folder icon
