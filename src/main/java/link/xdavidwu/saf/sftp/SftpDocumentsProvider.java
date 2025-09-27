@@ -228,8 +228,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		return session;
 	}
 
-	// TODO support cancellation
-	private synchronized SftpClient getClient() throws IOException {
+	private synchronized SftpClient getClient(CancellationSignal signal) throws IOException {
 		var session = ensureSession();
 		var retries = 3;
 		while (true) {
@@ -247,6 +246,9 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 						code == SshConstants.SSH_OPEN_RESOURCE_SHORTAGE;
 					if (temporary && retries-- != 0) {
 						Log.i(TAG, "temporary open channel failure (hitting concurrent channels limit on server?), waiting for any existing channel to close");
+						if (signal != null) {
+							signal.throwIfCanceled();
+						}
 
 						var adaptor = new ChannelClosedFutureAdaptor();
 						session.addChannelListener(adaptor);
@@ -260,6 +262,10 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 				throw e;
 			}
 		}
+	}
+
+	private SftpClient getClient() throws IOException {
+		return getClient(null);
 	}
 
 	@Override
@@ -292,7 +298,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 	@Override
 	public ParcelFileDescriptor openDocument(String documentId, String mode,
-			CancellationSignal cancellationSignal)
+			CancellationSignal signal)
 			throws FileNotFoundException {
 		int parcelFileDescriptorMode = ParcelFileDescriptor.parseMode(mode);
 		var sftpModes = EnumSet.noneOf(SftpClient.OpenMode.class);
@@ -309,7 +315,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 				"Mode " + mode + " is not supported yet.");
 		}
 
-		var sftp = ioToUnchecked(this::getClient);
+		var sftp = ioToUnchecked(() -> getClient(signal));
 		String filename = pathFromDocumentId(documentId);
 		var file = ioToUnchecked(() -> sftp.open(filename, sftpModes));
 		return ioToUnchecked(() -> sm.openProxyFileDescriptor(
