@@ -35,6 +35,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.StreamSupport;
 
@@ -252,9 +254,9 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 						var adaptor = new ChannelClosedFutureAdaptor();
 						session.addChannelListener(adaptor);
-						adaptor.future()
-							.completeOnTimeout(null, 1, TimeUnit.SECONDS)
-							.join();
+						try {
+							adaptor.future().get(1, TimeUnit.SECONDS);
+						} catch (TimeoutException|ExecutionException|InterruptedException e2) {}
 						session.removeChannelListener(adaptor);
 						continue;
 					}
