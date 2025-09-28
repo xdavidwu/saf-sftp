@@ -1,6 +1,11 @@
 package link.xdavidwu.saf.sftp;
 
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.os.ProxyFileDescriptorCallback;
+import android.os.IBinder;
 import android.system.ErrnoException;
 import android.system.OsConstants;
 import android.util.Log;
@@ -21,11 +26,21 @@ public class SftpProxyFileDescriptorCallback
 
 	private SftpClient sftp;
 	private SftpClient.CloseableHandle file;
+	private Context ctx;
+	private ServiceConnection serviceConnection = new ServiceConnection() {
+		@Override
+		public void onServiceConnected(ComponentName name, IBinder service) {}
+		@Override
+		public void onServiceDisconnected(ComponentName name) {}
+	};
 
 	public SftpProxyFileDescriptorCallback(
-			SftpClient sftp, SftpClient.CloseableHandle file) {
+			SftpClient sftp, SftpClient.CloseableHandle file, Context ctx) {
 		this.sftp = sftp;
 		this.file = file;
+		this.ctx = ctx;
+		var intent = new Intent(ctx, SftpIOService.class);
+		ctx.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
 	}
 
 	@Override
@@ -104,10 +119,12 @@ public class SftpProxyFileDescriptorCallback
 
 	@Override
 	public void onRelease() {
+		Log.v("SFTP", "release");
 		try {
 			sftp.close(file);
 			sftp.close();
 		} catch (IOException e) {
 		}
+		ctx.unbindService(serviceConnection);
 	}
 }

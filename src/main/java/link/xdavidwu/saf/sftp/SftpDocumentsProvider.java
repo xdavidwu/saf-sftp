@@ -329,7 +329,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 
 		return ioToUnchecked(() -> sm.openProxyFileDescriptor(
 			parcelFileDescriptorMode,
-			new SftpProxyFileDescriptorCallback(sftp, file),
+			new SftpProxyFileDescriptorCallback(sftp, file, getContext()),
 			ioHandler));
 	}
 

@@ -4,6 +4,8 @@
 	android:versionName="1.0">
 
 	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
 	<application android:label="@string/app_name"
 		android:icon="@mipmap/sym_def_app_icon"
@@ -26,5 +28,9 @@
 				<action android:name="android.content.action.DOCUMENTS_PROVIDER" />
 			</intent-filter>
 		</provider>
+		<service android:name="link.xdavidwu.saf.sftp.SftpIOService"
+			android:foregroundServiceType="dataSync"
+			android:exported="false">
+		</service>
 	</application>
 </manifest>
