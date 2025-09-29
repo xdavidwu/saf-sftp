@@ -121,13 +121,9 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		ssh.start();
 	}
 	private ConnectionParams params;
+	private String remotePath;
 
 	private CompletableFuture<Optional<FsCreds>> fsCreds;
-
-	// do not start with a dot
-	// DocumentsUI identify hidden files by presence of /. in documentId
-	// (or display name starting with .)
-	private static final String HOME_IDENTIFIER = ":HOME:";
 
 	private StorageManager sm;
 	private Handler ioHandler;
@@ -161,13 +157,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 
 	@Override
 	protected String pathFromDocumentId(String documentId) {
-		var path = super.pathFromDocumentId(documentId);
-		if (path.startsWith("/" + HOME_IDENTIFIER + "/")) {
-			return path.substring(HOME_IDENTIFIER.length() + 2);
-		} else if (path.equals("/" + HOME_IDENTIFIER)) {
-			return ".";
-		}
-		return path;
+		return remotePath + super.pathFromDocumentId(documentId);
 	}
 
 	@Override
@@ -198,6 +188,10 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 			sp.getString("username", ""),
 			sp.getString("passwd", "")
 		);
+		remotePath = sp.getString("mountpoint", ".");
+		if ("".equals(remotePath)) {
+			remotePath = ".";
+		}
 		if (session != null) {
 			try {
 				session.close();
@@ -589,27 +583,14 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		var cols = projection != null ? projection : DEFAULT_ROOT_PROJECTION;
 		var result = new MatrixCursor(cols);
 
-		var sp = PreferenceManager.getDefaultSharedPreferences(getContext());
-		var remotePath = sp.getString("mountpoint", ".");
-		var root = remotePath;
-		if (remotePath.equals("") || remotePath.equals(".")) {
-			root = HOME_IDENTIFIER;
-		} else if (remotePath.startsWith("./")) {
-			root = HOME_IDENTIFIER + remotePath.substring(1);
-		} else if (!remotePath.startsWith("/")) {
-			root = HOME_IDENTIFIER + "/" + remotePath;
-		}
-		var documentId = documentIdFromPath(root);
-		var rootUri = getRootUri();
+		var rootUri = getRootUri().toString();
 
 		var bytesInfo = mustIOWithCursor(result, () -> {
 			// unlike performQuery, connection/auth failure is not fatal here
 			try (var sftp = getClient()) {
-				var path = pathFromDocumentId(documentId);
-
 				var spaceAvailable = sftp.getExtension(SpaceAvailableExtension.class);
 				if (spaceAvailable.isSupported()) {
-					var info = spaceAvailable.available(path);
+					var info = spaceAvailable.available(remotePath + '/');
 
 					return new Long[]{
 						info.bytesOnDevice,
@@ -619,7 +600,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 
 				var statvfs = sftp.getExtension(OpenSSHStatPathExtension.class);
 				if (statvfs.isSupported()) {
-					var info = statvfs.stat(path);
+					var info = statvfs.stat(remotePath + '/');
 
 					return new Long[]{
 						info.f_blocks * info.f_frsize,
@@ -631,8 +612,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		}, DocumentsContract.EXTRA_INFO, "cannot statvfs: ").orElse(null);
 
 		result.addRow(Arrays.stream(cols).map(c -> switch(c) {
-		case Root.COLUMN_ROOT_ID -> rootUri.toString();
-		case Root.COLUMN_DOCUMENT_ID -> documentId;
+		case Root.COLUMN_ROOT_ID -> rootUri;
+		case Root.COLUMN_DOCUMENT_ID -> rootUri;
 		case Root.COLUMN_FLAGS ->
 			Root.FLAG_SUPPORTS_IS_CHILD | Root.FLAG_SUPPORTS_CREATE;
 		case Root.COLUMN_TITLE ->
