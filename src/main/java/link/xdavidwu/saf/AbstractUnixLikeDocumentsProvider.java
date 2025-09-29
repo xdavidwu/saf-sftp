@@ -24,7 +24,7 @@ import java.security.NoSuchAlgorithmException;
  * Helpers and partial implementation of a DocumentsProvider with a POSIX
  * filesystem from Unix-like environment that utilize XDG specs, including:
  *
- * - Documents URI <--> path translation
+ * - documentId <--> path translation
  * - isChildDocument
  * - Implementation of openDocumentThumbnail via
  *   - XDG thumbnail spec
@@ -32,6 +32,8 @@ import java.security.NoSuchAlgorithmException;
  *		- openDocument should support streaming, without downloading the whole file
  * - MIME types, via mode_t and filename
  *
+ * documentId is assumed to be a URI with authority, which path is the path,
+ * but root is an empty path instead of /.
  */
 public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvider {
 	private static final String LOG_NAME = "AbstractUnixLikeDocumentsProvider";
@@ -93,7 +95,7 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 	protected String toParentDocumentId(String documentId) {
 		var uri = Uri.parse(documentId);
 		var segments = uri.getPathSegments();
-		var builder = uri.buildUpon().path("/");
+		var builder = uri.buildUpon().path("");
 		segments.subList(0, segments.size() - 1).forEach(
 			seg -> builder.appendPath(seg));
 		return builder.build().toString();
@@ -150,18 +152,17 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 			Point sizeHint, CancellationSignal signal)
 			throws FileNotFoundException {
 		var path = pathFromDocumentId(documentId);
-		int dirIndex = path.lastIndexOf("/");
-		String filename = path.substring(dirIndex + 1);
-		String dir = path.substring(0, dirIndex + 1);
-		String thumbnailPath = dir + XDG_THUMBNAIL_NORMAL_DIR + getXDGThumbnailFile(filename);
+		var filename = basename(path);
+		var thumbnailDocumentId = toParentDocumentId(documentId) + '/' +
+			XDG_THUMBNAIL_NORMAL_DIR + getXDGThumbnailFile(filename);
 		try {
-			ParcelFileDescriptor fd = openDocument(documentIdFromPath(thumbnailPath), "r", signal);
+			var fd = openDocument(thumbnailDocumentId, "r", signal);
 			return new AssetFileDescriptor(fd, 0, fd.getStatSize());
 		} catch (Exception e) {
 		}
 
 		if (Build.VERSION.SDK_INT >= 30 && ExifInterface.isSupportedMimeType(getDocumentType(documentId))) {
-			ParcelFileDescriptor fd = openDocument(documentId, "r", signal);
+			var fd = openDocument(documentId, "r", signal);
 
 			var stream = new AutoCloseInputStream(fd);
 
