@@ -400,7 +400,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 				try {
 					return Optional.of(resolveFsCreds());
 				} catch (IOException e) {
-					toast("SFTP: Cannot resolve identity: " + e.getMessage());
+					toast("Cannot resolve identity: " + e.getMessage());
 					Log.e(TAG, "cannot resolve identify", e);
 				}
 				return Optional.empty();
