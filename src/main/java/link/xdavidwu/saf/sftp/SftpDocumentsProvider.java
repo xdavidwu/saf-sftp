@@ -56,9 +56,11 @@ import org.apache.sshd.sftp.common.SftpConstants;
 import org.apache.sshd.sftp.common.SftpException;
 
 import link.xdavidwu.saf.AbstractUnixLikeDocumentsProvider;
+import link.xdavidwu.saf.PerformsIO;
 import link.xdavidwu.saf.UncheckedAutoCloseable;
 
-public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
+public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
+		implements PerformsIO {
 	private static final String TAG = "SFTP";
 
 	protected record ConnectionParams(String host, int port,
@@ -169,7 +171,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 	}
 
 	@Override
-	protected IOException translateIOException(IOException e) {
+	public IOException translateIOException(IOException e) {
 		if (e instanceof SftpException s) {
 			switch (s.getStatus()) {
 			case SftpConstants.SSH_FX_NO_SUCH_FILE:

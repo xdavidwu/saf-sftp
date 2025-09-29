@@ -17,10 +17,10 @@ import org.apache.sshd.sftp.client.extensions.openssh.OpenSSHFsyncExtension;
 import org.apache.sshd.sftp.common.SftpConstants;
 import org.apache.sshd.sftp.common.SftpException;
 
-import link.xdavidwu.saf.AbstractUnixLikeProxyFileDescriptorCallback;
+import link.xdavidwu.saf.PerformsUnixLikeIO;
 
 public class SftpProxyFileDescriptorCallback
-		extends AbstractUnixLikeProxyFileDescriptorCallback {
+		extends ProxyFileDescriptorCallback implements PerformsUnixLikeIO {
 	private static final int OPENSSH_SFTP_MAX_MSG_LENGTH = 256 * 1024;
 	private static final int OPENSSH_SFTP_MAX_WRITE_LENGTH = OPENSSH_SFTP_MAX_MSG_LENGTH - 1024;
 
@@ -44,7 +44,7 @@ public class SftpProxyFileDescriptorCallback
 	}
 
 	@Override
-	protected int translateIOException(IOException e) {
+	public int translateIOException(IOException e) {
 		if (e instanceof SftpException s) {
 			return switch (s.getStatus()) {
 			case SftpConstants.SSH_FX_NO_SUCH_FILE		-> OsConstants.ENOENT;
@@ -71,7 +71,7 @@ public class SftpProxyFileDescriptorCallback
 			default -> OsConstants.EIO;
 			};
 		}
-		return super.translateIOException(e);
+		return OsConstants.EIO;
 	}
 
 	@Override
@@ -113,7 +113,7 @@ public class SftpProxyFileDescriptorCallback
 		}
 		io("fsync", () -> {
 			fsync.fsync(file);
-			return 0;
+			return null;
 		});
 	}
 
