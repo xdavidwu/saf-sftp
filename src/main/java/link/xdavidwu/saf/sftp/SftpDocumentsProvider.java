@@ -361,6 +361,18 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		return parent + "/" + displayName;
 	}
 
+	@Override
+	public void deleteDocument(String documentId)
+			throws FileNotFoundException {
+		var path = pathFromDocumentId(documentId);
+		ioToUnchecked(() -> {
+			try (var sftp = getClient()) {
+				sftp.remove(path);
+			}
+			return null;
+		});
+	}
+
 	private FsCreds resolveFsCreds() throws IOException {
 		// openDocument, ParcelFileDescriptor checks size, which is not
 		// friendly to /proc virtual files
@@ -453,25 +465,32 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider {
 		case Document.COLUMN_MIME_TYPE -> type;
 		case Document.COLUMN_SIZE -> lstat.getSize();
 		case Document.COLUMN_LAST_MODIFIED -> lstat.getModifyTime().toMillis();
-		case Document.COLUMN_FLAGS -> switch (stat.getPermissions() & S_IFMT) {
+		case Document.COLUMN_FLAGS -> {
+			var flags = switch (stat.getPermissions() & S_IFMT) {
 			case S_IFLNK -> Document.FLAG_PARTIAL;
 			case S_IFDIR -> hasModeBit(stat, S_IW | S_IX) ?
 				Document.FLAG_DIR_SUPPORTS_CREATE : 0;
 			case S_IFREG -> {
-				var flags = hasModeBit(stat, S_IW) ?
+				var rflags = hasModeBit(stat, S_IW) ?
 					Document.FLAG_SUPPORTS_WRITE : 0;
 				if (hasModeBit(stat, S_IR)) {
 					if (typeSupportsMetadata(type)) {
-						flags |= Document.FLAG_SUPPORTS_METADATA;
+						rflags |= Document.FLAG_SUPPORTS_METADATA;
 					}
 					if (typeSupportsThumbnail(type)) {
-						flags |= Document.FLAG_SUPPORTS_THUMBNAIL;
+						rflags |= Document.FLAG_SUPPORTS_THUMBNAIL;
 					}
 				}
-				yield flags;
+				yield rflags;
 			}
 			default -> 0;
 			};
+			if (!stat.isDirectory() && hasModeBit(parentStat, S_IW)) {
+				// TODO sticky
+				flags |= Document.FLAG_SUPPORTS_DELETE;
+			}
+			yield flags;
+		}
 		case Document.COLUMN_ICON -> {
 			if (lstat.isSymbolicLink() && stat.isDirectory()) {
 				// DocumentsUI grid view is hard-coded to system folder icon
