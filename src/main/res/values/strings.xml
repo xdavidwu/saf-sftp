@@ -8,8 +8,8 @@
 	<string name="port_summary">Port to connect.</string>
 	<string name="username">Username</string>
 	<string name="username_summary">Username to connect.</string>
-	<string name="mountpoint">Path to mount</string>
-	<string name="mountpoint_summary">Path on the server to mount.</string>
+	<string name="remote_path">Path to mount</string>
+	<string name="remote_path_summary">Path on the server to mount.</string>
 	<string name="auth">Authentication Details</string>
 	<string name="passwd">Password</string>
 	<string name="passwd_summary">Password.</string>

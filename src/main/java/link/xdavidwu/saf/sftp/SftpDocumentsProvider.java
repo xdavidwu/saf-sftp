@@ -590,14 +590,14 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		var result = new MatrixCursor(cols);
 
 		var sp = PreferenceManager.getDefaultSharedPreferences(getContext());
-		var mountpoint = sp.getString("mountpoint", ".");
-		var root = mountpoint;
-		if (mountpoint.equals("") || mountpoint.equals(".")) {
+		var remotePath = sp.getString("mountpoint", ".");
+		var root = remotePath;
+		if (remotePath.equals("") || remotePath.equals(".")) {
 			root = HOME_IDENTIFIER;
-		} else if (mountpoint.startsWith("./")) {
-			root = HOME_IDENTIFIER + mountpoint.substring(1);
-		} else if (!mountpoint.startsWith("/")) {
-			root = HOME_IDENTIFIER + "/" + mountpoint;
+		} else if (remotePath.startsWith("./")) {
+			root = HOME_IDENTIFIER + remotePath.substring(1);
+		} else if (!remotePath.startsWith("/")) {
+			root = HOME_IDENTIFIER + "/" + remotePath;
 		}
 		var documentId = documentIdFromPath(root);
 		var rootUri = getRootUri();
@@ -636,7 +636,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		case Root.COLUMN_FLAGS ->
 			Root.FLAG_SUPPORTS_IS_CHILD | Root.FLAG_SUPPORTS_CREATE;
 		case Root.COLUMN_TITLE ->
-			String.format("%s@%s:%s", params.username(), params.host(), mountpoint);
+			String.format("%s@%s:%s", params.username(), params.host(), remotePath);
 		case Root.COLUMN_ICON -> R.mipmap.sym_def_app_icon;
 		// DocumentsUI shows localized and humanized COLUMN_AVAILABLE_BYTES
 		// when summary is not present, which is more useful and nicer

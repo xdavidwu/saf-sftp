@@ -11,9 +11,10 @@
 		<EditTextPreference android:key="username"
 			android:summary="@string/username_summary"
 			android:title="@string/username" />
+		<!-- XXX: key misnomer -->
 		<EditTextPreference android:key="mountpoint"
-			android:summary="@string/mountpoint_summary"
-			android:title="@string/mountpoint" />
+			android:summary="@string/remote_path_summary"
+			android:title="@string/remote_path" />
 	</PreferenceCategory>
 	<PreferenceCategory android:title="@string/auth">
 		<EditTextPreference android:title="@string/passwd"

@@ -42,7 +42,7 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 		ssh = SshClient.setUpDefaultClient();
 		ssh.start();
 	}
-	private EditTextPreference hostText, portText, usernameText, passwdText, mountpointText;
+	private EditTextPreference hostText, portText, usernameText, passwdText, remotePathText;
 
 	private void notifyRootChanges() {
 		Uri uri = DocumentsContract.buildRootsUri("link.xdavidwu.saf.sftp");
@@ -58,7 +58,7 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 		portText = (EditTextPreference) findPreference("port");
 		usernameText = (EditTextPreference) findPreference("username");
 		passwdText = (EditTextPreference) findPreference("passwd");
-		mountpointText = (EditTextPreference) findPreference("mountpoint");
+		remotePathText = (EditTextPreference) findPreference("mountpoint");
 		Preference testConnection = findPreference("test_connection");
 		testConnection.setOnPreferenceClickListener((p) -> {
 			SharedPreferences settings = MainActivity.this.
@@ -150,7 +150,7 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 		if (!settings.getString("passwd", "").equals(""))
 			passwdText.setSummary(getString(R.string.passwd_filled));
 		if (!settings.getString("mountpoint", "").equals(""))
-			mountpointText.setSummary(settings.getString("mountpoint", ""));
+			remotePathText.setSummary(settings.getString("mountpoint", ""));
 	}
 
 	@Override
@@ -184,10 +184,10 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 				break;
 			case "mountpoint":
 				if (settings.getString("mountpoint", "").equals(""))
-					mountpointText.setSummary(
-						getString(R.string.mountpoint_summary));
+					remotePathText.setSummary(
+						getString(R.string.remote_path_summary));
 				else
-					mountpointText.setSummary(
+					remotePathText.setSummary(
 						settings.getString("mountpoint", ""));
 				break;
 		}
