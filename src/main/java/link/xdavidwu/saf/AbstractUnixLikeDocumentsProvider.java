@@ -19,6 +19,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 
 /*
  * Helpers and partial implementation of a DocumentsProvider with a POSIX
@@ -37,6 +38,24 @@ import java.security.NoSuchAlgorithmException;
  */
 public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvider {
 	private static final String LOG_NAME = "AbstractUnixLikeDocumentsProvider";
+
+	// credentials and capabilities applicable for remote filesystem
+	public record FsCreds(
+			int uid, int gid, int[] supplementaryGroups,
+			long effectiveCapabilities) {
+		public static final int CAP_DAC_OVERRIDE = 1;
+		public static final int CAP_DAC_READ_SEARCH = 2;
+
+		public boolean hasGroup(int gid) {
+			return this.gid == gid ||
+				Arrays.asList(supplementaryGroups).contains(gid);
+		}
+
+		public boolean hasCapability(int cap) {
+			var mask = 1l << cap;
+			return (effectiveCapabilities & mask) == mask;
+		}
+	}
 
 	// TODO consider sized ones
 	protected static final String XDG_THUMBNAIL_NORMAL_DIR = ".sh_thumbnails/normal/";
@@ -79,6 +98,26 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 	}
 
 	protected static int S_IR = 4, S_IW = 2, S_IX = 1;
+
+	// extract applicable permission bits from mode, may be checked with
+	// S_IR, S_IW, S_IX, capabilities are also considered
+	protected int getModeBits(int mode, int uid, int gid, FsCreds fsCreds) {
+		if (fsCreds == null) {
+			return 7;
+		}
+		if (fsCreds.hasCapability(FsCreds.CAP_DAC_OVERRIDE)) {
+			return 7;
+		}
+		var bits = (
+			fsCreds.uid() == uid ? mode >> 6 :
+			fsCreds.hasGroup(gid) ? mode >> 3 :
+			mode
+		) & 7;
+		if (fsCreds.hasCapability(FsCreds.CAP_DAC_READ_SEARCH)) {
+			bits |= S_IR | S_IX;
+		}
+		return bits;
+	}
 
 	// an URI without path part
 	// TODO support multiple roots
