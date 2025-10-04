@@ -131,8 +131,8 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		var uri = Uri.parse(documentId);
 		var segments = uri.getPathSegments();
 		var builder = uri.buildUpon().path("");
-		segments.subList(0, segments.size() - 1).forEach(
-			seg -> builder.appendPath(seg));
+		segments.subList(0, segments.size() > 0 ? segments.size() - 1 : 0)
+			.forEach(seg -> builder.appendPath(seg));
 		return builder.build().toString();
 	}
 
