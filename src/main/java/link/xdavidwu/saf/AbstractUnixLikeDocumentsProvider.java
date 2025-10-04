@@ -119,16 +119,12 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		return bits;
 	}
 
-	// an URI without path part
-	// TODO support multiple roots
-	protected abstract Uri getRootUri();
-
 	protected String pathFromDocumentId(String documentId) {
 		return Uri.parse(documentId).getPath();
 	}
 
-	protected String documentIdFromPath(String path) {
-		return getRootUri().buildUpon().path(path).build().toString();
+	protected String documentIdFromPath(Uri root, String path) {
+		return root.buildUpon().path(path).build().toString();
 	}
 
 	protected String toParentDocumentId(String documentId) {
