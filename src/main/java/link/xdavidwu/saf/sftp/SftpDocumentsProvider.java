@@ -134,11 +134,6 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 	};
 
 	@Override
-	protected Uri getRootUri() {
-		return params.getRootUri();
-	}
-
-	@Override
 	protected String pathFromDocumentId(String documentId) {
 		return remotePath + super.pathFromDocumentId(documentId);
 	}
@@ -554,7 +549,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		var cols = projection != null ? projection : DEFAULT_ROOT_PROJECTION;
 		var result = new MatrixCursor(cols);
 
-		var rootUri = getRootUri().toString();
+		var rootUri = params.getRootUri().toString();
 
 		var bytesInfo = mustIOWithCursor(result, () -> {
 			// unlike performQuery, connection/auth failure is not fatal here
