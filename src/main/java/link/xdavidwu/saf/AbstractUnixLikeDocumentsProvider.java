@@ -5,9 +5,7 @@ import android.graphics.Point;
 import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.CancellationSignal;
-import android.os.ParcelFileDescriptor;
 import android.os.ParcelFileDescriptor.AutoCloseInputStream;
 import android.provider.DocumentsContract.Document;
 import android.provider.DocumentsProvider;
@@ -229,44 +227,5 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 				return null;
 			}
 		}
-	}
-
-	protected boolean typeSupportsMetadata(String mimeType) {
-		return MediaMetadataReader.isSupportedMimeType(mimeType) ||
-			MetadataReader.isSupportedMimeType(mimeType);
-	}
-
-	// getDocumentMetadata but with getDocumentType,
-	// for downstream to extend without re-query
-	public Bundle getDocumentMetadata(String documentId, String mimeType)
-			throws FileNotFoundException {
-		if (MetadataReader.isSupportedMimeType(mimeType)) {
-			ParcelFileDescriptor fd = openDocument(documentId, "r", null);
-			Bundle metadata = new Bundle();
-
-			try (var stream = new UncheckedAutoCloseable<AutoCloseInputStream>(
-						new AutoCloseInputStream(fd))) {
-				MetadataReader.getMetadata(metadata, stream.c(), mimeType, null);
-			} catch (IOException e) {
-				Log.e(LOG_NAME, "getMetadata: ", e);
-				return null;
-			}
-			return metadata;
-		} else if (MediaMetadataReader.isSupportedMimeType(mimeType)) {
-			Bundle metadata = new Bundle();
-			try (var fd = new UncheckedAutoCloseable<ParcelFileDescriptor>(
-						openDocument(documentId, "r", null))){
-				MediaMetadataReader.getMetadata(metadata,
-					fd.c().getFileDescriptor(), mimeType);
-			}
-			return metadata;
-		}
-		return null;
-	}
-
-	@Override
-	public Bundle getDocumentMetadata(String documentId)
-			throws FileNotFoundException {
-		return getDocumentMetadata(documentId, getDocumentType(documentId));
 	}
 }

@@ -15,12 +15,16 @@
  */
 
 /*
- * Changed to remove Nullable annotation, make it under link.xdavidwu.saf namespace,
- * support whatever mimetype ExifInterface supports, default to extract all
- * recognized tags
+ * From android.provider.MetadataReader
+ *
+ * Changes:
+ *	- Remove Nullable annotation
+ *	- Make it under link.xdavidwu.saf.metadata namespace
+ *  - Support whatever mimetype ExifInterface supports on SDK >= 30
+ *  - Default to extract all recognized tags
  */
 
-package link.xdavidwu.saf;
+package link.xdavidwu.saf.metadata;
 
 import android.media.ExifInterface;
 import android.provider.DocumentsContract;
