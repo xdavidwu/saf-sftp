@@ -1,5 +1,6 @@
 package link.xdavidwu.saf.sftp;
 
+import android.app.AuthenticationRequiredException;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.MatrixCursor;
@@ -58,9 +59,10 @@ import org.apache.sshd.sftp.common.SftpException;
 import link.xdavidwu.saf.AbstractUnixLikeDocumentsProvider;
 import link.xdavidwu.saf.PerformsIO;
 import link.xdavidwu.saf.UncheckedAutoCloseable;
+import link.xdavidwu.saf.metadata.SuppliesMetadataViaProviders;
 
 public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
-		implements PerformsIO {
+		implements PerformsIO, SuppliesMetadataViaProviders {
 	private static final String TAG = "SFTP";
 
 	protected record ConnectionParams(String host, int port,
@@ -541,6 +543,12 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 
 			result.addRow(getDocumentRow(sftp, result, documentId, stat, parentStat));
 		});
+	}
+
+	@Override
+	public Bundle getDocumentMetadata(String documentId)
+			throws AuthenticationRequiredException, FileNotFoundException {
+		return getDocumentMetadataViaProviders(documentId);
 	}
 
 	public Cursor queryRoots(String[] projection) {
