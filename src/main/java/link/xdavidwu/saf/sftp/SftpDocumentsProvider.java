@@ -535,10 +535,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 			var stat = ioWithCursor(result, () -> sftp.lstat(path))
 				.orElseThrow(this::abortQuery);
 
-			var dirIndex = path.lastIndexOf("/");
-			var parentPath = dirIndex != -1 ? path.substring(0, dirIndex + 1) : ".";
-			var parentStat = ioWithCursor(result,
-					() -> sftp.stat(parentPath))
+			var parentPath = pathFromDocumentId(toParentDocumentId(documentId));
+			var parentStat = ioWithCursor(result, () -> sftp.stat(parentPath))
 				.orElseThrow(this::abortQuery);
 
 			result.addRow(getDocumentRow(sftp, result, documentId, stat, parentStat));
