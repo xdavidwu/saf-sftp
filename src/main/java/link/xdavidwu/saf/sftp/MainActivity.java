@@ -4,10 +4,7 @@ import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
-import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.StrictMode;
 import android.preference.EditTextPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
@@ -38,7 +35,7 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 	private EditTextPreference hostText, portText, usernameText, passwdText, remotePathText;
 
 	private void notifyRootChanges() {
-		Uri uri = DocumentsContract.buildRootsUri("link.xdavidwu.saf.sftp");
+		var uri = DocumentsContract.buildRootsUri("link.xdavidwu.saf.sftp");
 		getContentResolver().notifyChange(uri, null);
 	}
 
@@ -58,15 +55,13 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 				getPreferenceScreen().getSharedPreferences();
 			ProgressDialog pd = ProgressDialog.show(MainActivity.this,
 				"Connection test", "Connecting.");
-			AsyncTask.execute(() -> {
-				String result = "Succeeded.";
+			CompletableFuture.supplyAsync(() -> {
 				try {
 					var params = SftpConnectionParameters.fromSharedPreferences(settings);
 					var session = params.preAuth();
 					session.setServerKeyVerifier((ClientSession s, SocketAddress a, PublicKey k) -> {
 						var serverHostKey = k.getEncoded();
-						CompletableFuture<Boolean> acceptFuture =
-							new CompletableFuture<>();
+						var acceptFuture = new CompletableFuture<Boolean>();
 
 						var raw = new ByteArrayBuffer();
 						raw.putRawPublicKey(k);
@@ -103,28 +98,22 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 								.show();
 						});
 
-						try {
-							return acceptFuture.get();
-						} catch (Exception e) {
-							Log.e("SFTP", "verify: " + e.getMessage());
-							return false;
-						}
+						return acceptFuture.join();
 					});
 					session.auth().verify();
 					session.close();
+					return "Succeeded.";
 				} catch (IOException e) {
-					result = e.getMessage();
+					return e.getMessage();
 				}
-				final String message = result;
-				MainActivity.this.runOnUiThread(() -> {
-					new AlertDialog.Builder(MainActivity.this)
-						.setTitle("Connection test result")
-						.setMessage(message)
-						.setPositiveButton("OK", null)
-						.show();
-					pd.dismiss();
-				});
-			});
+			}).thenAccept(message -> MainActivity.this.runOnUiThread(() -> {
+				new AlertDialog.Builder(MainActivity.this)
+					.setTitle("Connection test result")
+					.setMessage(message)
+					.setPositiveButton("OK", null)
+					.show();
+				pd.dismiss();
+			}));
 			return true;
 		});
 
