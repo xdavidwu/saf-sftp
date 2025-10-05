@@ -63,24 +63,6 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		implements PerformsIO, SuppliesMetadataViaProviders {
 	private static final String TAG = "SFTP";
 
-	protected record ConnectionParams(String host, int port,
-			String username, String password, String remotePath) {
-
-		protected ClientSession connect() throws IOException {
-			var session = ssh.connect(username, host, port)
-				.verify(Duration.ofSeconds(3))
-				.getClientSession();
-			session.addPasswordIdentity(password);
-			session.auth().verify(Duration.ofSeconds(3));
-			return session;
-		}
-
-		protected Uri getRootUri() {
-			return new Uri.Builder().scheme("sftp")
-				.authority(username + "@" + host + ":" + port).build();
-		}
-	}
-
 	protected static class ChannelClosedFutureAdaptor implements ChannelListener {
 		private CompletableFuture<Void> future = new CompletableFuture<>();
 
@@ -96,14 +78,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 	}
 
 	private static final String HEARTBEAT_REQUEST = "keepalive@sftp.saf.xdavidwu.link";
-	private static SshClient ssh;
 	private ClientSession session;
-	static {
-		PathUtils.setUserHomeFolderResolver(() -> FileSystems.getDefault().getPath("/"));
-		ssh = SshClient.setUpDefaultClient();
-		ssh.start();
-	}
-	private ConnectionParams params;
+	private SftpConnectionParameters params;
 
 	private CompletableFuture<Optional<FsCreds>> fsCreds;
 
@@ -159,17 +135,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 
 	private SharedPreferences.OnSharedPreferenceChangeListener loadConfig =
 			(sp, key) -> {
-		var remotePath = sp.getString("mountpoint", ".");
-		if ("".equals(remotePath)) {
-			remotePath = ".";
-		}
-		params = new ConnectionParams(
-			sp.getString("host", ""),
-			Integer.parseInt(sp.getString("port", "22")),
-			sp.getString("username", ""),
-			sp.getString("passwd", ""),
-			remotePath
-		);
+		params = SftpConnectionParameters.fromSharedPreferences(sp);
 		if (session != null) {
 			try {
 				session.close();

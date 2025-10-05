@@ -35,13 +35,6 @@ import org.apache.sshd.common.util.buffer.ByteArrayBuffer;
 import org.apache.sshd.common.util.io.PathUtils;
 
 public class MainActivity extends PreferenceActivity implements OnSharedPreferenceChangeListener {
-
-	private static SshClient ssh;
-	static {
-		PathUtils.setUserHomeFolderResolver(() -> FileSystems.getDefault().getPath("/"));
-		ssh = SshClient.setUpDefaultClient();
-		ssh.start();
-	}
 	private EditTextPreference hostText, portText, usernameText, passwdText, remotePathText;
 
 	private void notifyRootChanges() {
@@ -68,12 +61,8 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 			AsyncTask.execute(() -> {
 				String result = "Succeeded.";
 				try {
-					var session = ssh.connect(
-						settings.getString("username", ""),
-						settings.getString("host", ""),
-						Integer.parseInt(settings.getString("port", "22"))
-					).verify(Duration.ofSeconds(3)).getClientSession();
-					session.addPasswordIdentity(settings.getString("passwd", ""));
+					var params = SftpConnectionParameters.fromSharedPreferences(settings);
+					var session = params.preAuth();
 					session.setServerKeyVerifier((ClientSession s, SocketAddress a, PublicKey k) -> {
 						var serverHostKey = k.getEncoded();
 						CompletableFuture<Boolean> acceptFuture =
