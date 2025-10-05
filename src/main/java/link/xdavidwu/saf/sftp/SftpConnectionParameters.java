@@ -10,12 +10,20 @@ import java.time.Duration;
 import org.apache.sshd.client.SshClient;
 import org.apache.sshd.client.session.ClientSession;
 import org.apache.sshd.common.util.io.PathUtils;
+import org.apache.sshd.common.util.security.SecurityProviderChoice;
+import org.apache.sshd.common.util.security.SecurityUtils;
+import org.apache.sshd.contrib.common.util.security.androidopenssl.AndroidOpenSSLSecurityProviderRegistrar;
 
 public record SftpConnectionParameters(String host, int port,
 		String username, String password, String remotePath) {
 	private static SshClient ssh;
 	static {
 		PathUtils.setUserHomeFolderResolver(() -> FileSystems.getDefault().getPath("/"));
+		SecurityUtils.registerSecurityProvider(
+			new AndroidOpenSSLSecurityProviderRegistrar());
+		SecurityUtils.setDefaultProviderChoice(
+			SecurityProviderChoice.toSecurityProviderChoice(
+				AndroidOpenSSLSecurityProviderRegistrar.NAME));
 		ssh = SshClient.setUpDefaultClient();
 		ssh.start();
 	}

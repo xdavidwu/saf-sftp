@@ -39,6 +39,7 @@ android {
 
 dependencies {
 	implementation 'org.apache.sshd:sshd-sftp:2.16.0'
+	implementation 'org.apache.sshd:sshd-contrib:2.16.0'
 }
 
 allprojects {
