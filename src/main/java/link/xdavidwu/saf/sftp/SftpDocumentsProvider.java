@@ -18,8 +18,9 @@ import android.provider.DocumentsContract;
 import android.provider.DocumentsContract.Document;
 import android.provider.DocumentsContract.Root;
 import android.provider.DocumentsProvider;
-import android.widget.Toast;
+import android.system.OsConstants;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
@@ -413,9 +414,19 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 			}
 			default -> 0;
 			};
-			if (!stat.isDirectory() && hasModeBit(parentStat, S_IW)) {
-				// TODO sticky
-				flags |= Document.FLAG_SUPPORTS_DELETE;
+			if (!lstat.isDirectory() && hasModeBit(parentStat, S_IW)) {
+				var blockedBySticky = fsCreds.join().map(creds -> {
+					if ((parentStat.getPermissions() & OsConstants.S_ISVTX)
+							!= OsConstants.S_ISVTX) {
+						return false;
+					}
+					return !creds.hasCapability(FsCreds.CAP_DAC_OVERRIDE) &&
+						creds.uid() != parentStat.getUserId() &&
+						creds.uid() != lstat.getUserId();
+				}).orElse(false);
+				if (!blockedBySticky) {
+					flags |= Document.FLAG_SUPPORTS_DELETE;
+				}
 			}
 			yield flags;
 		}
