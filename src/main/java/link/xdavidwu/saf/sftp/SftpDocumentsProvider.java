@@ -63,17 +63,16 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		implements PerformsIO, SuppliesMetadataViaProviders {
 	private static final String TAG = "SFTP";
 
-	protected static class ChannelClosedFutureAdaptor implements ChannelListener {
-		private CompletableFuture<Void> future = new CompletableFuture<>();
+	protected static record ChannelClosedFutureAdaptor(
+			CompletableFuture<Void> future) implements ChannelListener {
+		public ChannelClosedFutureAdaptor() {
+			this(new CompletableFuture<>());
+		}
 
 		@Override
 		public void channelClosed(Channel c, Throwable r) {
 			Log.i(TAG, "channel released");
 			future.complete(null);
-		}
-
-		public CompletableFuture<Void> future() {
-			return future;
 		}
 	}
 
@@ -133,22 +132,25 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		toastHandler.sendMessage(toastHandler.obtainMessage(0, msg));
 	}
 
-	private SharedPreferences.OnSharedPreferenceChangeListener loadConfig =
-			(sp, key) -> {
-		params = SftpConnectionParameters.fromSharedPreferences(sp);
+	private void resetSession() {
 		if (session != null) {
 			try {
 				session.close();
-			} catch (IOException e) {}
+			} catch (IOException e) {
+				Log.w(TAG, "failed to close session", e);
+			}
+			session = null;
 		}
-		session = null;
+	}
+
+	private SharedPreferences.OnSharedPreferenceChangeListener loadConfig =
+			(sp, key) -> {
+		params = SftpConnectionParameters.fromSharedPreferences(sp);
+		resetSession();
 		fsCreds = null;
 	};
 
 	private ClientSession ensureSession() throws IOException {
-		// /shrug if we are somehow invoked on main thread
-		StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.LAX);
-
 		if (session != null) {
 			// org.apache.sshd.client.session.ClientConnectionService::sendHeartBeat
 			var buf = session.createBuffer(
@@ -158,19 +160,21 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 			buf.putBoolean(true);
 			try {
 				session.request(HEARTBEAT_REQUEST, buf,
-					Duration.ofSeconds(10));
+					Duration.ofSeconds(3));
 				return session;
 			} catch (IOException e) {
-				// try new session
+				Log.i(TAG, "session heartbeat failed, creating new session");
 			}
-			session.close();
-			session = null;
+			resetSession();
 		}
 		session = params.connect();
 		return session;
 	}
 
 	private synchronized SftpClient getClient(CancellationSignal signal) throws IOException {
+		// /shrug if we are somehow invoked on main thread
+		StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.LAX);
+
 		var session = ensureSession();
 		var retries = 3;
 		while (true) {
@@ -254,25 +258,23 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 
 		if (remainingBits[0] != 0) {
 			throw new UnsupportedOperationException(
-				"Mode " + mode + " is not supported yet.");
+				"Mode " + mode + " not supported");
 		}
 
 		var sftp = ioToUnchecked(() -> getClient(signal));
-		String filename = pathFromDocumentId(documentId);
-		SftpClient.CloseableHandle file;
+		var filename = pathFromDocumentId(documentId);
 		try {
-			file = ioToUnchecked(() -> sftp.open(filename, sftpModes));
+			var file = ioToUnchecked(() -> sftp.open(filename, sftpModes));
+			return ioToUnchecked(() -> sm.openProxyFileDescriptor(
+				parcelFileDescriptorMode,
+				new SftpProxyFileDescriptorCallback(sftp, file, getContext()),
+				ioHandler));
 		} catch (FileNotFoundException|UncheckedIOException e) {
 			try {
 				sftp.close();
 			} catch (IOException e2) {}
 			throw e;
 		}
-
-		return ioToUnchecked(() -> sm.openProxyFileDescriptor(
-			parcelFileDescriptorMode,
-			new SftpProxyFileDescriptorCallback(sftp, file, getContext()),
-			ioHandler));
 	}
 
 	@Override
@@ -347,17 +349,15 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 	}
 
 	private void hoistFsCreds() {
-		if (fsCreds == null) {
-			fsCreds = CompletableFuture.supplyAsync(() -> {
-				try {
-					return Optional.of(resolveFsCreds());
-				} catch (IOException e) {
-					toast("Cannot resolve identity: " + e.getMessage());
-					Log.e(TAG, "cannot resolve identify", e);
-				}
-				return Optional.empty();
-			});
-		}
+		fsCreds = fsCreds != null ? fsCreds : CompletableFuture.supplyAsync(() -> {
+			try {
+				return Optional.of(resolveFsCreds());
+			} catch (IOException e) {
+				toast("Cannot resolve identity: " + e.getMessage());
+				Log.e(TAG, "cannot resolve identify", e);
+			}
+			return Optional.empty();
+		});
 	}
 
 	private int getModeBits(SftpClient.Attributes stat) {
