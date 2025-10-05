@@ -1,6 +1,7 @@
 package link.xdavidwu.saf.sftp;
 
 import android.app.AuthenticationRequiredException;
+import android.content.ContentResolver;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.MatrixCursor;
@@ -63,6 +64,7 @@ import link.xdavidwu.saf.metadata.SuppliesMetadataViaProviders;
 public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		implements PerformsIO, SuppliesMetadataViaProviders {
 	private static final String TAG = "SFTP";
+	private static final String AUTHORITY = "link.xdavidwu.saf.sftp";
 
 	protected static record ChannelClosedFutureAdaptor(
 			CompletableFuture<Void> future) implements ChannelListener {
@@ -83,6 +85,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 
 	private CompletableFuture<Optional<FsCreds>> fsCreds;
 
+	private ContentResolver cr;
 	private StorageManager sm;
 	private Handler ioHandler;
 	private Handler toastHandler;
@@ -217,17 +220,19 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 
 	@Override
 	public boolean onCreate() {
-		sm = getContext().getSystemService(StorageManager.class);
+		var ctx = getContext();
+		cr = ctx.getContentResolver();
+		sm = ctx.getSystemService(StorageManager.class);
 		var ioThread = new HandlerThread("IO thread");
 		ioThread.start();
 		ioHandler = new Handler(ioThread.getLooper());
 		toastHandler = new Handler(Looper.getMainLooper(), msg -> {
-			Toast.makeText(getContext(), "SAF-SFTP: " + msg.obj.toString(),
+			Toast.makeText(ctx, "SAF-SFTP: " + msg.obj.toString(),
 				Toast.LENGTH_LONG).show();
 			return true;
 		});
 
-		var sp = PreferenceManager.getDefaultSharedPreferences(getContext());
+		var sp = PreferenceManager.getDefaultSharedPreferences(ctx);
 		sp.registerOnSharedPreferenceChangeListener(loadConfig);
 		loadConfig.onSharedPreferenceChanged(sp, "");
 		return true;
@@ -300,7 +305,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 				return null;
 			});
 		}
-		// TODO notify child change
+		cr.notifyChange(DocumentsContract.buildChildDocumentsUri(
+				AUTHORITY, parentDocumentId), null, 0);
 		return parent + "/" + displayName;
 	}
 
@@ -314,6 +320,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 			}
 			return null;
 		});
+		cr.notifyChange(DocumentsContract.buildChildDocumentsUri(
+				AUTHORITY, toParentDocumentId(documentId)), null, 0);
 	}
 
 	private FsCreds resolveFsCreds() throws IOException {
@@ -474,8 +482,10 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 			throws FileNotFoundException {
 		var cols = projection != null ? projection : DEFAULT_DOC_PROJECTION;
 		var result = new MatrixCursor(cols);
-		hoistFsCreds();
+		result.setNotificationUri(cr, DocumentsContract.buildChildDocumentsUri(
+				AUTHORITY, parentDocumentId));
 
+		hoistFsCreds();
 		return performQuery(result, sftp -> {
 			var filename = pathFromDocumentId(parentDocumentId);
 			var entries = ioWithCursor(result,
