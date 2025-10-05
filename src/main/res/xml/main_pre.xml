@@ -2,25 +2,26 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 	<PreferenceCategory android:title="@string/conn_dest">
 		<EditTextPreference android:key="host"
-			android:summary="@string/host_summary"
-			android:title="@string/host" />
-		<EditTextPreference android:title="@string/port"
-			android:summary="@string/port_summary"
-			android:inputType="numberDecimal"
-			android:key="port" android:defaultValue="22" />
+			android:title="@string/host" android:summary="@string/host_summary"
+			android:inputType="text" />
+		<EditTextPreference android:key="port"
+			android:title="@string/port" android:summary="@string/port_summary"
+			android:inputType="numberDecimal" android:defaultValue="22" />
 		<EditTextPreference android:key="username"
+			android:title="@string/username"
 			android:summary="@string/username_summary"
-			android:title="@string/username" />
+			android:inputType="text" />
 		<!-- XXX: key misnomer -->
 		<EditTextPreference android:key="mountpoint"
+			android:title="@string/remote_path"
 			android:summary="@string/remote_path_summary"
-			android:title="@string/remote_path" />
+			android:inputType="text" />
 	</PreferenceCategory>
 	<PreferenceCategory android:title="@string/auth">
-		<EditTextPreference android:title="@string/passwd"
+		<EditTextPreference android:key="passwd"
+			android:title="@string/passwd"
 			android:summary="@string/passwd_summary"
-			android:inputType="textPassword"
-			android:key="passwd" />
+			android:inputType="textPassword" />
 	</PreferenceCategory>
 	<Preference android:key="test_connection"
 		android:title="Test connection"
