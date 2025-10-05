@@ -34,12 +34,10 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.StreamSupport;
 
 import org.apache.sshd.client.SshClient;
 import org.apache.sshd.client.session.ClientSession;
@@ -66,7 +64,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 	private static final String TAG = "SFTP";
 
 	protected record ConnectionParams(String host, int port,
-			String username, String password) {
+			String username, String password, String remotePath) {
 
 		protected ClientSession connect() throws IOException {
 			var session = ssh.connect(username, host, port)
@@ -106,7 +104,6 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		ssh.start();
 	}
 	private ConnectionParams params;
-	private String remotePath;
 
 	private CompletableFuture<Optional<FsCreds>> fsCreds;
 
@@ -137,7 +134,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 
 	@Override
 	protected String pathFromDocumentId(String documentId) {
-		return remotePath + super.pathFromDocumentId(documentId);
+		return params.remotePath() + super.pathFromDocumentId(documentId);
 	}
 
 	@Override
@@ -162,16 +159,17 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 
 	private SharedPreferences.OnSharedPreferenceChangeListener loadConfig =
 			(sp, key) -> {
+		var remotePath = sp.getString("mountpoint", ".");
+		if ("".equals(remotePath)) {
+			remotePath = ".";
+		}
 		params = new ConnectionParams(
 			sp.getString("host", ""),
 			Integer.parseInt(sp.getString("port", "22")),
 			sp.getString("username", ""),
-			sp.getString("passwd", "")
+			sp.getString("passwd", ""),
+			remotePath
 		);
-		remotePath = sp.getString("mountpoint", ".");
-		if ("".equals(remotePath)) {
-			remotePath = ".";
-		}
 		if (session != null) {
 			try {
 				session.close();
@@ -493,6 +491,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		});
 	}
 
+	@Override
 	public Cursor queryChildDocuments(
 			String parentDocumentId, String[] projection, String sortOrder)
 			throws FileNotFoundException {
@@ -526,6 +525,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		});
 	}
 
+	@Override
 	public Cursor queryDocument(String documentId, String[] projection)
 			throws FileNotFoundException {
 		var cols = projection != null ? projection : DEFAULT_DOC_PROJECTION;
@@ -551,6 +551,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		return getDocumentMetadataViaProviders(documentId);
 	}
 
+	@Override
 	public Cursor queryRoots(String[] projection) {
 		var cols = projection != null ? projection : DEFAULT_ROOT_PROJECTION;
 		var result = new MatrixCursor(cols);
@@ -562,7 +563,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 			try (var sftp = getClient()) {
 				var spaceAvailable = sftp.getExtension(SpaceAvailableExtension.class);
 				if (spaceAvailable.isSupported()) {
-					var info = spaceAvailable.available(remotePath + '/');
+					var info = spaceAvailable.available(params.remotePath());
 
 					return new Long[]{
 						info.bytesOnDevice,
@@ -572,7 +573,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 
 				var statvfs = sftp.getExtension(OpenSSHStatPathExtension.class);
 				if (statvfs.isSupported()) {
-					var info = statvfs.stat(remotePath + '/');
+					var info = statvfs.stat(params.remotePath());
 
 					return new Long[]{
 						info.f_blocks * info.f_frsize,
@@ -589,7 +590,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		case Root.COLUMN_FLAGS ->
 			Root.FLAG_SUPPORTS_IS_CHILD | Root.FLAG_SUPPORTS_CREATE;
 		case Root.COLUMN_TITLE ->
-			String.format("%s@%s:%s", params.username(), params.host(), remotePath);
+			String.format("%s@%s:%s", params.username(), params.host(), params.remotePath());
 		case Root.COLUMN_ICON -> R.mipmap.sym_def_app_icon;
 		// DocumentsUI shows localized and humanized COLUMN_AVAILABLE_BYTES
 		// when summary is not present, which is more useful and nicer
