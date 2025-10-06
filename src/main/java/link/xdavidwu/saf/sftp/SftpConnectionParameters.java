@@ -13,6 +13,7 @@ import org.apache.sshd.common.util.io.PathUtils;
 import org.apache.sshd.common.util.security.SecurityProviderChoice;
 import org.apache.sshd.common.util.security.SecurityUtils;
 import org.apache.sshd.contrib.common.util.security.androidopenssl.AndroidOpenSSLSecurityProviderRegistrar;
+import org.apache.sshd.core.CoreModuleProperties;
 
 public record SftpConnectionParameters(String host, int port,
 		String username, String password, String remotePath) {
@@ -25,6 +26,8 @@ public record SftpConnectionParameters(String host, int port,
 			SecurityProviderChoice.toSecurityProviderChoice(
 				AndroidOpenSSLSecurityProviderRegistrar.NAME));
 		ssh = SshClient.setUpDefaultClient();
+		// SAF seems to read at most 128k per request
+		CoreModuleProperties.MAX_PACKET_SIZE.set(ssh, 0x40000L);
 		ssh.start();
 	}
 
