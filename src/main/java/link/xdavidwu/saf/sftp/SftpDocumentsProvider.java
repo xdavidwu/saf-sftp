@@ -155,7 +155,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 	};
 
 	private ClientSession ensureSession() throws IOException {
-		if (session != null) {
+		if (session != null && !session.isClosing()) {
 			// org.apache.sshd.client.session.ClientConnectionService::sendHeartBeat
 			var buf = session.createBuffer(
 				SshConstants.SSH_MSG_GLOBAL_REQUEST,
@@ -167,7 +167,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 					Duration.ofSeconds(3));
 				return session;
 			} catch (IOException e) {
-				Log.i(TAG, "session heartbeat failed, creating new session");
+				Log.i(TAG, "session heartbeat failed, creating new session", e);
 			}
 			resetSession();
 		}
