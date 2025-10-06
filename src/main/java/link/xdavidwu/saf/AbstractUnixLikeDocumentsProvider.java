@@ -6,7 +6,6 @@ import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.CancellationSignal;
-import android.os.ParcelFileDescriptor.AutoCloseInputStream;
 import android.provider.DocumentsContract.Document;
 import android.provider.DocumentsProvider;
 import android.webkit.MimeTypeMap;
@@ -197,15 +196,13 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		if (Build.VERSION.SDK_INT >= 30 && ExifInterface.isSupportedMimeType(getDocumentType(documentId))) {
 			var fd = openDocument(documentId, "r", signal);
 
-			var stream = new AutoCloseInputStream(fd);
-
 			try {
-				var exif = new ExifInterface(stream);
+				var exif = new ExifInterface(fd.getFileDescriptor());
 				var range = exif.getThumbnailRange();
 				if (range != null) {
 					return new AssetFileDescriptor(fd, range[0], range[1]);
 				}
-				stream.close();
+				fd.close();
 			} catch (IOException e) {
 			}
 		}
