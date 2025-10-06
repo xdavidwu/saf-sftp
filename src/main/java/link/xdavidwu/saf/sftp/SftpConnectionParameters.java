@@ -11,6 +11,7 @@ import java.util.List;
 import org.apache.sshd.client.SshClient;
 import org.apache.sshd.client.session.ClientSession;
 import org.apache.sshd.common.cipher.BuiltinCiphers;
+import org.apache.sshd.common.mac.BuiltinMacs;
 import org.apache.sshd.common.util.io.PathUtils;
 import org.apache.sshd.common.util.security.SecurityProviderChoice;
 import org.apache.sshd.common.util.security.SecurityUtils;
@@ -28,8 +29,10 @@ public record SftpConnectionParameters(String host, int port,
 			SecurityProviderChoice.toSecurityProviderChoice(
 				AndroidOpenSSLSecurityProviderRegistrar.NAME));
 		ssh = SshClient.setUpDefaultClient();
+
 		// SAF seems to read at most 128k per request
 		CoreModuleProperties.MAX_PACKET_SIZE.set(ssh, 0x40000L);
+
 		// org.apache.sshd.common.BaseBuilder.DEFAULT_CIPHERS_PREFERENCE
 		// reorder by performance
 		ssh.setCipherFactories(List.of(
@@ -42,6 +45,16 @@ public record SftpConnectionParameters(String host, int port,
 			BuiltinCiphers.aes256cbc,
 			BuiltinCiphers.aes256gcm,
 			BuiltinCiphers.cc20p1305_openssh));
+		// org.apache.sshd.common.BaseBuilder.DEFAULT_MAC_PREFERENCE
+		// reorder by performance
+		ssh.setMacFactories(List.of(
+			BuiltinMacs.hmacsha1etm,
+			BuiltinMacs.hmacsha1,
+			BuiltinMacs.hmacsha512etm,
+			BuiltinMacs.hmacsha512,
+			BuiltinMacs.hmacsha256etm,
+			BuiltinMacs.hmacsha256));
+
 		ssh.start();
 	}
 
