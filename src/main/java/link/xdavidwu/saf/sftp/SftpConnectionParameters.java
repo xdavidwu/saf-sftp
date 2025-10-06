@@ -6,9 +6,11 @@ import android.net.Uri;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.time.Duration;
+import java.util.List;
 
 import org.apache.sshd.client.SshClient;
 import org.apache.sshd.client.session.ClientSession;
+import org.apache.sshd.common.cipher.BuiltinCiphers;
 import org.apache.sshd.common.util.io.PathUtils;
 import org.apache.sshd.common.util.security.SecurityProviderChoice;
 import org.apache.sshd.common.util.security.SecurityUtils;
@@ -28,6 +30,18 @@ public record SftpConnectionParameters(String host, int port,
 		ssh = SshClient.setUpDefaultClient();
 		// SAF seems to read at most 128k per request
 		CoreModuleProperties.MAX_PACKET_SIZE.set(ssh, 0x40000L);
+		// org.apache.sshd.common.BaseBuilder.DEFAULT_CIPHERS_PREFERENCE
+		// reorder by performance
+		ssh.setCipherFactories(List.of(
+			BuiltinCiphers.aes128ctr,
+			BuiltinCiphers.aes128cbc,
+			BuiltinCiphers.aes128gcm,
+			BuiltinCiphers.aes192ctr,
+			BuiltinCiphers.aes192cbc,
+			BuiltinCiphers.aes256ctr,
+			BuiltinCiphers.aes256cbc,
+			BuiltinCiphers.aes256gcm,
+			BuiltinCiphers.cc20p1305_openssh));
 		ssh.start();
 	}
 
