@@ -22,6 +22,7 @@
  *	- Make it under link.xdavidwu.saf.metadata namespace
  *  - Support whatever mimetype ExifInterface supports on SDK >= 30
  *  - Default to extract all recognized tags
+ *  - Take fd instead of InputStream
  */
 
 package link.xdavidwu.saf.metadata;
@@ -31,8 +32,8 @@ import android.provider.DocumentsContract;
 import android.os.Build;
 import android.os.Bundle;
 
+import java.io.FileDescriptor;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -219,17 +220,17 @@ public final class MetadataReader {
      * Currently only functions for exifdata
      *
      * @param metadata the bundle to which we add any relevant metadata
-     * @param stream InputStream containing a file
+     * @param fd file descriptor, not closed by this function
      * @param mimeType type of the given file
      * @param tags a variable amount of keys to differentiate which tags the user wants
      *             if null, returns a default set of data. See {@link DEFAULT_EXIF_TAGS}.
      * @throws IOException when the file doesn't exist
      */
-    public static void getMetadata(Bundle metadata, InputStream stream, String mimeType,
+    public static void getMetadata(Bundle metadata, FileDescriptor fd, String mimeType,
             String[] tags) throws IOException {
         List<String> metadataTypes = new ArrayList<>();
         if (isSupportedMimeType(mimeType)) {
-            Bundle exifData = getExifData(stream, tags);
+            Bundle exifData = getExifData(fd, tags);
             if (exifData.size() > 0) {
                 metadata.putBundle(DocumentsContract.METADATA_EXIF, exifData);
                 metadataTypes.add(DocumentsContract.METADATA_EXIF);
@@ -243,17 +244,17 @@ public final class MetadataReader {
     /**
      * Helper method that is called if getMetadata is called for an image mimeType.
      *
-     * @param stream the input stream from which to extra data.
+     * @param fd the file descriptor from which to extra data, not closed by this function.
      * @param tags a list of ExifInterface tags that are used to retrieve data.
      *             if null, returns a default set of data. See {@link DEFAULT_EXIF_TAGS}.
      */
-    private static Bundle getExifData(InputStream stream, String[] tags)
+    private static Bundle getExifData(FileDescriptor fd, String[] tags)
             throws IOException {
         if (tags == null) {
             tags = DEFAULT_EXIF_TAGS;
         }
 
-        ExifInterface exifInterface = new ExifInterface(stream);
+        ExifInterface exifInterface = new ExifInterface(fd);
         Bundle exif = new Bundle();
         for (String tag : tags) {
             if (TYPE_MAPPING.get(tag).equals(TYPE_INT)) {
