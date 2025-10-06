@@ -11,6 +11,8 @@ import android.system.OsConstants;
 import android.util.Log;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.sshd.sftp.client.extensions.openssh.OpenSSHFsyncExtension;
@@ -81,12 +83,11 @@ public class SftpProxyFileDescriptorCallback
 
 	@Override
 	public int onRead(long offset, int size, byte[] data) throws ErrnoException {
-		return io("read", () -> {
-			Log.v("SFTP", "r: " + size + "@" + offset);
+		var start = Instant.now();
+		var sz = io("read", () -> {
 			int read = 0;
 			while (read < size) {
 				int r = sftp.read(file, offset + read, data, read, size - read);
-				Log.v("SFTP", "pr: " + (size - read) + "@" + (offset + read) + "=" + r);
 				if (r == -1) {
 					return read;
 				}
@@ -94,6 +95,9 @@ public class SftpProxyFileDescriptorCallback
 			}
 			return size;
 		});
+		var ms = start.until(Instant.now(), ChronoUnit.MILLIS);
+		Log.v("SFTP", "r: " + size + "@" + offset + ": " + sz + " in " + ms + " ~ " + (sz / ms) + " kBps");
+		return sz;
 	}
 
 	@Override
