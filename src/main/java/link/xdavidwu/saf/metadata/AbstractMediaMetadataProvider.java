@@ -31,9 +31,7 @@ public abstract class AbstractMediaMetadataProvider implements MetadataProvider 
 			extends MediaMetadataRetriever implements AutoCloseable {
 		@Override
 		public void close() throws IOException {
-			if (Build.VERSION.SDK_INT >= 29) {
-				super.close();
-			}
+			super.release();
 		}
 	}
 
