@@ -18,6 +18,7 @@ public interface SuppliesThumbnailsViaProviders {
 	static final List<ThumbnailsProvider> DEFAULT_PROVIDERS = List.of(
 		new ExifThumbnailsProvider(),
 		new EmbeddedPictureThumbnailsProvider(),
+		new FrameThumbnailsProvider(),
 		new ImageSelfThumbnailsProvider());
 
 	// forwarded from DocumentsProvider
