@@ -19,6 +19,7 @@ public interface SuppliesThumbnailsViaProviders {
 		new ExifThumbnailsProvider(),
 		new EmbeddedPictureThumbnailsProvider(),
 		new FrameThumbnailsProvider(),
+		new PdfThumbnailsProvider(),
 		new ImageSelfThumbnailsProvider());
 
 	// forwarded from DocumentsProvider
