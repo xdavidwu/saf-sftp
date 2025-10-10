@@ -18,6 +18,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
+import link.xdavidwu.saf.thumbnails.SuppliesThumbnailsViaProviders;
+
 /*
  * Helpers and partial implementation of a DocumentsProvider with a POSIX
  * filesystem from Unix-like environment that utilize XDG specs, including:
@@ -26,14 +28,15 @@ import java.util.Arrays;
  * - isChildDocument
  * - Implementation of openDocumentThumbnail via
  *   - XDG thumbnail spec
- *   - EXIF thumbnail on SDK >= 30
+ *   - EXIF thumbnail
  *		- openDocument should support streaming, without downloading the whole file
  * - MIME types, via mode_t and filename
  *
  * documentId is assumed to be a URI with authority, which path is the path,
  * but root is an empty path instead of /.
  */
-public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvider {
+public abstract class AbstractUnixLikeDocumentsProvider
+		extends DocumentsProvider implements SuppliesThumbnailsViaProviders {
 	private static final String LOG_NAME = "AbstractUnixLikeDocumentsProvider";
 
 	// credentials and capabilities applicable for remote filesystem
@@ -174,11 +177,7 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		return xdgThumbnailNameCache.get(name) + ".png";
 	}
 
-	protected boolean typeSupportsThumbnail(String mimeType) {
-		return Build.VERSION.SDK_INT >= 30 &&
-			ExifInterface.isSupportedMimeType(mimeType);
-	}
-
+	// TODO move this wiring downstream
 	@Override
 	public AssetFileDescriptor openDocumentThumbnail(String documentId,
 			Point sizeHint, CancellationSignal signal)
@@ -193,21 +192,7 @@ public abstract class AbstractUnixLikeDocumentsProvider extends DocumentsProvide
 		} catch (Exception e) {
 		}
 
-		if (Build.VERSION.SDK_INT >= 30 && ExifInterface.isSupportedMimeType(getDocumentType(documentId))) {
-			var fd = openDocument(documentId, "r", signal);
-
-			try {
-				var exif = new ExifInterface(fd.getFileDescriptor());
-				var range = exif.getThumbnailRange();
-				if (range != null) {
-					return new AssetFileDescriptor(fd, range[0], range[1]);
-				}
-				fd.close();
-			} catch (IOException e) {
-			}
-		}
-
-		throw new FileNotFoundException();
+		return openDocumentThumbnailViaProviders(documentId, sizeHint, signal);
 	}
 
 	// default implementation query without projection, which may be costly
