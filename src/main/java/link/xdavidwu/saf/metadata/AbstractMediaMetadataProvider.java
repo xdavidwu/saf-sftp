@@ -9,6 +9,8 @@ import android.provider.DocumentsContract;
 import java.io.IOException;
 import java.util.Map;
 
+import link.xdavidwu.saf.AutoCloseableMediaMetadataRetriever;
+
 public abstract class AbstractMediaMetadataProvider implements MetadataProvider {
 
 	protected enum Type {
@@ -25,15 +27,6 @@ public abstract class AbstractMediaMetadataProvider implements MetadataProvider 
 	protected abstract String getMetadataType();
 
 	protected abstract Map<Integer, KeyInfo> getMetadataKeyMap();
-
-	// compatibility with pre 29
-	private static class AutoCloseableMediaMetadataRetriever
-			extends MediaMetadataRetriever implements AutoCloseable {
-		@Override
-		public void close() throws IOException {
-			super.release();
-		}
-	}
 
 	protected void extractUnmappedMetadata(Bundle typeSpecificMetadata,
 			MediaMetadataRetriever mmr) {
