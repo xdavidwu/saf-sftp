@@ -38,6 +38,11 @@ public interface SuppliesMetadataViaProviders {
 	default Bundle getDocumentMetadataViaProviders(String documentId)
 			throws AuthenticationRequiredException, FileNotFoundException {
 		var mimeType = getDocumentType(documentId);
+		if (mimeType == null) {
+			Log.e(TAG, "getDocumentType returns null");
+			return null;
+		}
+
 		var provider = getMetadataProviders().stream()
 			.filter(p -> p.isSupportedMimeType(mimeType)).findFirst();
 		if (provider.isEmpty()) {
