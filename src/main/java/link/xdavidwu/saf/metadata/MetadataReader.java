@@ -204,14 +204,14 @@ public final class MetadataReader {
 
 
     /**
-     * Returns true if caller can generally expect to get metadata results
+     * Returns true if caller may expect to get metadata results
      * for the supplied mimetype.
      */
     public static boolean isSupportedMimeType(String mimeType) {
         if (Build.VERSION.SDK_INT >= 30) {
             return ExifInterface.isSupportedMimeType(mimeType);
         } else {
-            return JPG_MIME_TYPE.equals(mimeType) || JPEG_MIME_TYPE.equals(mimeType);
+            return mimeType.startsWith("image/");
         }
     }
 
