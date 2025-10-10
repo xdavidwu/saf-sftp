@@ -5,6 +5,7 @@ import android.content.ContentResolver;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.MatrixCursor;
+import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.CancellationSignal;
@@ -86,6 +87,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 	private CompletableFuture<Optional<FsCreds>> fsCreds;
 
 	private ContentResolver cr;
+	private ConnectivityManager cm;
 	private StorageManager sm;
 	private Handler ioHandler;
 	private Handler toastHandler;
@@ -223,6 +225,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		var ctx = getContext();
 		cr = ctx.getContentResolver();
 		sm = ctx.getSystemService(StorageManager.class);
+		cm = ctx.getSystemService(ConnectivityManager.class);
 		var ioThread = new HandlerThread("IO thread");
 		ioThread.start();
 		ioHandler = new Handler(ioThread.getLooper());
@@ -410,7 +413,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 			case S_IFREG -> {
 				var rflags = hasModeBit(stat, S_IW) ?
 					Document.FLAG_SUPPORTS_WRITE : 0;
-				if (hasModeBit(stat, S_IR)) {
+				if (hasModeBit(stat, S_IR) && cm.getRestrictBackgroundStatus()
+						!= ConnectivityManager.RESTRICT_BACKGROUND_STATUS_ENABLED) {
 					if (typeSupportsMetadata(type)) {
 						rflags |= Document.FLAG_SUPPORTS_METADATA;
 					}
