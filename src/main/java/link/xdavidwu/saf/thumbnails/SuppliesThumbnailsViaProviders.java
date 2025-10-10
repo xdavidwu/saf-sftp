@@ -16,7 +16,7 @@ import java.util.Objects;
 public interface SuppliesThumbnailsViaProviders {
 	static final String TAG = "SuppliesThumbnailsViaProviders";
 	static final List<ThumbnailsProvider> DEFAULT_PROVIDERS = List.of(
-		new ExifThumbnailsProvider());
+		new ExifThumbnailsProvider(), new ImageSelfThumbnailsProvider());
 
 	// forwarded from DocumentsProvider
 	ParcelFileDescriptor openDocument(String documentId, String mode,
