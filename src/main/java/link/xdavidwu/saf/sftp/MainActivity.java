@@ -13,6 +13,7 @@ import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.style.TypefaceSpan;
+import android.util.Base64;
 import android.util.Log;
 
 import java.io.IOException;
@@ -20,8 +21,6 @@ import java.net.SocketAddress;
 import java.nio.file.FileSystems;
 import java.security.PublicKey;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
 
 import org.apache.sshd.client.SshClient;
@@ -66,8 +65,7 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 						var raw = new ByteArrayBuffer();
 						raw.putRawPublicKey(k);
 						var key64 = new SpannableString(
-							Base64.getEncoder().encodeToString(
-								Arrays.copyOfRange(raw.array(), 0, raw.wpos())));
+							Base64.encodeToString(raw.array(), 0, raw.wpos(), Base64.DEFAULT));
 						var md5 = new SpannableString(
 							KeyUtils.getFingerPrint(BuiltinDigests.md5, k));
 						var sha256 = new SpannableString(
