@@ -26,4 +26,7 @@
 	<Preference android:key="test_connection"
 		android:title="Test connection"
 		android:summary="Attempt a connection" />
+	<Preference android:key="launch"
+		android:title="Start file manager"
+		android:summary="View the files via system built-in file manager" />
 </PreferenceScreen>

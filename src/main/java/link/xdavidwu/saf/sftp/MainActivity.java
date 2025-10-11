@@ -2,6 +2,7 @@ package link.xdavidwu.saf.sftp;
 
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.os.Bundle;
@@ -31,10 +32,11 @@ import org.apache.sshd.common.util.buffer.ByteArrayBuffer;
 import org.apache.sshd.common.util.io.PathUtils;
 
 public class MainActivity extends PreferenceActivity implements OnSharedPreferenceChangeListener {
+	private static final String AUTHORITY = "link.xdavidwu.saf.sftp";
 	private EditTextPreference hostText, portText, usernameText, passwdText, remotePathText;
 
 	private void notifyRootChanges() {
-		var uri = DocumentsContract.buildRootsUri("link.xdavidwu.saf.sftp");
+		var uri = DocumentsContract.buildRootsUri(AUTHORITY);
 		getContentResolver().notifyChange(uri, null);
 	}
 
@@ -112,6 +114,16 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 					.show();
 				pd.dismiss();
 			}));
+			return true;
+		});
+		var launch = findPreference("launch");
+		launch.setOnPreferenceClickListener(p -> {
+			var settings = MainActivity.this.
+				getPreferenceScreen().getSharedPreferences();
+			var params = SftpConnectionParameters.fromSharedPreferences(settings);
+			var uri = DocumentsContract.buildRootUri(AUTHORITY, params.getRootUri().toString());
+			var intent = new Intent(Intent.ACTION_VIEW, uri);
+			startActivity(intent);
 			return true;
 		});
 
