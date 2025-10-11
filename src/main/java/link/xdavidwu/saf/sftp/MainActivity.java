@@ -9,11 +9,6 @@ import android.os.Bundle;
 import android.preference.EditTextPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
-import android.text.Spannable;
-import android.text.SpannableString;
-import android.text.SpannableStringBuilder;
-import android.text.style.TypefaceSpan;
-import android.util.Base64;
 import android.util.Log;
 
 import java.io.IOException;
@@ -22,13 +17,6 @@ import java.nio.file.FileSystems;
 import java.security.PublicKey;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-
-import org.apache.sshd.client.SshClient;
-import org.apache.sshd.client.session.ClientSession;
-import org.apache.sshd.common.config.keys.KeyUtils;
-import org.apache.sshd.common.digest.BuiltinDigests;
-import org.apache.sshd.common.util.buffer.ByteArrayBuffer;
-import org.apache.sshd.common.util.io.PathUtils;
 
 public class MainActivity extends PreferenceActivity implements OnSharedPreferenceChangeListener {
 	private EditTextPreference hostText, portText, usernameText, passwdText, remotePathText;
@@ -53,46 +41,7 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 				try {
 					var params = SftpConnectionParameters.fromSharedPreferences(settings);
 					var session = params.preAuth();
-					session.setServerKeyVerifier((ClientSession s, SocketAddress a, PublicKey k) -> {
-						var serverHostKey = k.getEncoded();
-						var acceptFuture = new CompletableFuture<Boolean>();
-
-						var raw = new ByteArrayBuffer();
-						raw.putRawPublicKey(k);
-						var key64 = new SpannableString(
-							Base64.encodeToString(raw.array(), 0, raw.wpos(), Base64.DEFAULT));
-						var md5 = new SpannableString(
-							KeyUtils.getFingerPrint(BuiltinDigests.md5, k));
-						var sha256 = new SpannableString(
-							KeyUtils.getFingerPrint(BuiltinDigests.sha256, k));
-
-						key64.setSpan(new TypefaceSpan("monospace"), 0, key64.length(),
-							Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-						md5.setSpan(new TypefaceSpan("monospace"), 0, md5.length(),
-							Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-						sha256.setSpan(new TypefaceSpan("monospace"), 0,
-							sha256.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-						MainActivity.this.runOnUiThread(() -> {
-							new AlertDialog.Builder(MainActivity.this)
-								.setTitle("Host key verification")
-								.setMessage(new SpannableStringBuilder(
-										"Accept SSH server key of type " +
-										KeyUtils.getKeyType(k) + ": ")
-									.append(key64).append("?\n")
-									.append(md5).append("\n")
-									.append(sha256))
-								.setCancelable(false)
-								.setPositiveButton("Accept", (dialog, which) -> {
-									acceptFuture.complete(true);
-								}).setNegativeButton("Deny", (dialog, which) -> {
-									acceptFuture.complete(false);
-								})
-								.show();
-						});
-
-						return acceptFuture.join();
-					});
+					session.setServerKeyVerifier(new SshServerKeyVerifier(MainActivity.this));
 					session.auth().verify();
 					session.close();
 					return "Succeeded.";
