@@ -6,28 +6,30 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.os.Bundle;
-import android.preference.EditTextPreference;
 import android.preference.Preference;
 import android.preference.PreferenceFragment;
 import android.util.Log;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public class SettingsFragment extends PreferenceFragment
 		implements OnSharedPreferenceChangeListener {
-	private EditTextPreference hostText, portText, usernameText, passwdText, remotePathText;
+	private static final Map<String, Integer> EMPTY_SUMMARY_MAPPING = new HashMap<>();
+	static {
+		EMPTY_SUMMARY_MAPPING.put("host", R.string.host_summary);
+		EMPTY_SUMMARY_MAPPING.put("port", R.string.port_summary);
+		EMPTY_SUMMARY_MAPPING.put("username", R.string.username_summary);
+		EMPTY_SUMMARY_MAPPING.put("mountpoint", R.string.remote_path_summary);
+	}
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		addPreferencesFromResource(R.xml.main_pre);
 
-		hostText = (EditTextPreference) findPreference("host");
-		portText = (EditTextPreference) findPreference("port");
-		usernameText = (EditTextPreference) findPreference("username");
-		passwdText = (EditTextPreference) findPreference("passwd");
-		remotePathText = (EditTextPreference) findPreference("mountpoint");
 		Preference testConnection = findPreference("test_connection");
 		var activity = getActivity();
 		testConnection.setOnPreferenceClickListener((p) -> {
@@ -69,56 +71,31 @@ public class SettingsFragment extends PreferenceFragment
 
 		SharedPreferences settings = getPreferenceScreen().getSharedPreferences();
 		settings.registerOnSharedPreferenceChangeListener(this);
-		if (!settings.getString("host", "").equals(""))
-			hostText.setSummary(settings.getString("host", ""));
-		if (!settings.getString("port", "").equals(""))
-			portText.setSummary(settings.getString("port", ""));
-		if (!settings.getString("username", "").equals(""))
-			usernameText.setSummary(settings.getString("username", ""));
-		if (!settings.getString("passwd", "").equals(""))
-			passwdText.setSummary(getString(R.string.passwd_filled));
-		if (!settings.getString("mountpoint", "").equals(""))
-			remotePathText.setSummary(settings.getString("mountpoint", ""));
+		EMPTY_SUMMARY_MAPPING.forEach((key, resId) -> {
+			var val = settings.getString(key, "");
+			if (!"".equals(val)) {
+				findPreference(key).setSummary(val);
+			}
+		});
+		if (!settings.getString("passwd", "").equals("")) {
+			findPreference("passwd").setSummary(
+				getString(R.string.passwd_filled));
+		}
 	}
 
 	@Override
 	public void onSharedPreferenceChanged(SharedPreferences settings, String key) {
 		var params = SftpConnectionParameters.fromSharedPreferences(settings);
 		getActivity().getContentResolver().notifyChange(params.getRootContentUri(), null);
-		switch (key) {
-			case "host":
-				if (settings.getString("host", "").equals(""))
-					hostText.setSummary(getString(R.string.host_summary));
-				else
-					hostText.setSummary(settings.getString("host", ""));
-				break;
-			case "port":
-				if (settings.getString("port", "").equals(""))
-					portText.setSummary(getString(R.string.port_summary));
-				else
-					portText.setSummary(settings.getString("port", ""));
-				break;
-			case "username":
-				if (settings.getString("username", "").equals(""))
-					usernameText.setSummary(
-						getString(R.string.username_summary));
-				else
-					usernameText.setSummary(settings.getString("username", ""));
-				break;
-			case "passwd":
-				if (settings.getString("passwd", "").equals(""))
-					passwdText.setSummary(getString(R.string.passwd_summary));
-				else
-					passwdText.setSummary(getString(R.string.passwd_filled));
-				break;
-			case "mountpoint":
-				if (settings.getString("mountpoint", "").equals(""))
-					remotePathText.setSummary(
-						getString(R.string.remote_path_summary));
-				else
-					remotePathText.setSummary(
-						settings.getString("mountpoint", ""));
-				break;
+		var resIdBoxed = EMPTY_SUMMARY_MAPPING.get(key);
+		if (resIdBoxed != null) {
+			var val = settings.getString(key, "");
+			findPreference(key).setSummary(
+				"".equals(val) ? getString(resIdBoxed) : val);
+		} else if ("passwd".equals(key)) {
+			var val = settings.getString(key, "");
+			findPreference(key).setSummary(getString("".equals(val) ?
+					R.string.passwd_summary : R.string.passwd_filled));
 		}
 	}
 }
