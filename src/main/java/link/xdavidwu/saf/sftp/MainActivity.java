@@ -9,7 +9,6 @@ import android.os.Bundle;
 import android.preference.EditTextPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
-import android.provider.DocumentsContract;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
@@ -32,13 +31,7 @@ import org.apache.sshd.common.util.buffer.ByteArrayBuffer;
 import org.apache.sshd.common.util.io.PathUtils;
 
 public class MainActivity extends PreferenceActivity implements OnSharedPreferenceChangeListener {
-	private static final String AUTHORITY = "link.xdavidwu.saf.sftp";
 	private EditTextPreference hostText, portText, usernameText, passwdText, remotePathText;
-
-	private void notifyRootChanges() {
-		var uri = DocumentsContract.buildRootsUri(AUTHORITY);
-		getContentResolver().notifyChange(uri, null);
-	}
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -121,8 +114,7 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 			var settings = MainActivity.this.
 				getPreferenceScreen().getSharedPreferences();
 			var params = SftpConnectionParameters.fromSharedPreferences(settings);
-			var uri = DocumentsContract.buildRootUri(AUTHORITY, params.getRootUri().toString());
-			var intent = new Intent(Intent.ACTION_VIEW, uri);
+			var intent = new Intent(Intent.ACTION_VIEW, params.getRootContentUri());
 			startActivity(intent);
 			return true;
 		});
@@ -143,7 +135,8 @@ public class MainActivity extends PreferenceActivity implements OnSharedPreferen
 
 	@Override
 	public void onSharedPreferenceChanged(SharedPreferences settings, String key) {
-		notifyRootChanges();
+		var params = SftpConnectionParameters.fromSharedPreferences(settings);
+		getContentResolver().notifyChange(params.getRootContentUri(), null);
 		switch (key) {
 			case "host":
 				if (settings.getString("host", "").equals(""))

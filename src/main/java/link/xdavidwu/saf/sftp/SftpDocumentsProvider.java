@@ -547,7 +547,7 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		var cols = projection != null ? projection : DEFAULT_ROOT_PROJECTION;
 		var result = new MatrixCursor(cols);
 
-		var rootUri = params.getRootUri().toString();
+		var rootDocumentId = params.getRootDocumentId().toString();
 
 		var bytesInfo = mustIOWithCursor(result, () -> {
 			// unlike performQuery, connection/auth failure is not fatal here
@@ -576,8 +576,8 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 		}, DocumentsContract.EXTRA_INFO, "cannot statvfs: ").orElse(null);
 
 		result.addRow(Arrays.stream(cols).map(c -> switch(c) {
-		case Root.COLUMN_ROOT_ID -> rootUri;
-		case Root.COLUMN_DOCUMENT_ID -> rootUri;
+		case Root.COLUMN_ROOT_ID -> rootDocumentId;
+		case Root.COLUMN_DOCUMENT_ID -> rootDocumentId;
 		case Root.COLUMN_FLAGS ->
 			Root.FLAG_SUPPORTS_IS_CHILD | Root.FLAG_SUPPORTS_CREATE;
 		case Root.COLUMN_TITLE ->

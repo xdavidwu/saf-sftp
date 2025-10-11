@@ -2,6 +2,7 @@ package link.xdavidwu.saf.sftp;
 
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.provider.DocumentsContract;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -20,6 +21,8 @@ import org.apache.sshd.core.CoreModuleProperties;
 
 public record SftpConnectionParameters(String host, int port,
 		String username, String password, String remotePath) {
+	public static final String AUTHORITY = "link.xdavidwu.saf.sftp";
+
 	private static SshClient ssh;
 	static {
 		PathUtils.setUserHomeFolderResolver(() -> FileSystems.getDefault().getPath("/"));
@@ -87,8 +90,13 @@ public record SftpConnectionParameters(String host, int port,
 		return session;
 	}
 
-	public Uri getRootUri() {
+	public Uri getRootDocumentId() {
 		return new Uri.Builder().scheme("sftp")
 			.authority(username + "@" + host + ":" + port).build();
+	}
+
+	public Uri getRootContentUri() {
+		return DocumentsContract.buildRootUri(AUTHORITY,
+			getRootDocumentId().toString());
 	}
 }
