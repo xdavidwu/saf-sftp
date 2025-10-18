@@ -1,21 +1,11 @@
 package link.xdavidwu.saf;
 
-import android.content.res.AssetFileDescriptor;
-import android.graphics.Point;
-import android.media.ExifInterface;
-import android.net.Uri;
-import android.os.Build;
-import android.os.CancellationSignal;
 import android.provider.DocumentsContract.Document;
 import android.provider.DocumentsProvider;
 import android.webkit.MimeTypeMap;
 import android.util.Log;
-import android.util.LruCache;
 
 import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
 import link.xdavidwu.saf.thumbnails.SuppliesThumbnailsViaProviders;
@@ -56,12 +46,6 @@ public abstract class AbstractUnixLikeDocumentsProvider
 			return (effectiveCapabilities & mask) == mask;
 		}
 	}
-
-	// TODO consider sized ones
-	protected static final String XDG_THUMBNAIL_NORMAL_DIR = ".sh_thumbnails/normal/";
-	protected static final String[] XDG_THUMBNAIL_DIRS = {
-		XDG_THUMBNAIL_NORMAL_DIR
-	};
 
 	protected static MimeTypeMap mimeTypeMap = MimeTypeMap.getSingleton();
 	protected static String getTypeFromName(String filename) {
@@ -119,80 +103,10 @@ public abstract class AbstractUnixLikeDocumentsProvider
 		return bits;
 	}
 
-	protected String pathFromDocumentId(String documentId) {
-		return Uri.parse(documentId).getPath();
-	}
-
-	protected String documentIdFromPath(Uri root, String path) {
-		return root.buildUpon().path(path).build().toString();
-	}
-
-	protected String toParentDocumentId(String documentId) {
-		var uri = Uri.parse(documentId);
-		var segments = uri.getPathSegments();
-		var builder = uri.buildUpon().path("");
-		segments.subList(0, segments.size() > 0 ? segments.size() - 1 : 0)
-			.forEach(seg -> builder.appendPath(seg));
-		return builder.build().toString();
-	}
-
-	protected String basename(String path) {
-		return path.substring(path.lastIndexOf("/") + 1);
-	}
-
 	@Override
 	public boolean isChildDocument(String parentDocumentId, String documentId) {
 		return documentId.startsWith(parentDocumentId) &&
 			documentId.charAt(parentDocumentId.length()) == '/';
-	}
-
-	private static MessageDigest md5;
-	static {
-		try {
-			md5 = MessageDigest.getInstance("MD5");
-		} catch (NoSuchAlgorithmException e) {
-			throw new RuntimeException(e);
-		}
-	}
-	private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
-	// String.hashCode should be faster than md5
-	private static LruCache<String, String> xdgThumbnailNameCache =
-			new LruCache<String, String>(1 * 1024 * 1024) {
-		protected String create(String key) {
-			// 16 bytes
-			var digest = md5.digest(("./" + key).getBytes());
-			var hex = new char[32];
-			for (int i = 0; i < 16; i++) {
-				hex[i * 2] = HEX_DIGITS[(digest[i] & 0xf0) >>> 4];
-				hex[i * 2 + 1] = HEX_DIGITS[digest[i] & 0xf];
-			}
-			return String.valueOf(hex);
-		}
-
-		protected int sizeOf(String key, String value) {
-			return 32;
-		}
-	};
-	protected String getXDGThumbnailFile(String name) {
-		return xdgThumbnailNameCache.get(name) + ".png";
-	}
-
-	// TODO move this wiring downstream
-	@Override
-	public AssetFileDescriptor openDocumentThumbnail(String documentId,
-			Point sizeHint, CancellationSignal signal)
-			throws FileNotFoundException {
-		var path = pathFromDocumentId(documentId);
-		var filename = basename(path);
-		var thumbnailDocumentId = toParentDocumentId(documentId) + '/' +
-			XDG_THUMBNAIL_NORMAL_DIR + getXDGThumbnailFile(filename);
-		try {
-			var fd = openDocument(thumbnailDocumentId, "r", signal);
-			return new AssetFileDescriptor(fd, 0, fd.getStatSize());
-		} catch (Exception e) {
-		}
-
-		return openDocumentThumbnailViaProviders(documentId, sizeHint, signal);
 	}
 
 	// default implementation query without projection, which may be costly
