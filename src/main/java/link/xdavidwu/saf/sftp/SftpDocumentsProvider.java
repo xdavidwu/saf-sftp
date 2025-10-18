@@ -3,8 +3,10 @@ package link.xdavidwu.saf.sftp;
 import android.app.AuthenticationRequiredException;
 import android.content.ContentResolver;
 import android.content.SharedPreferences;
+import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.database.MatrixCursor;
+import android.graphics.Point;
 import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -60,10 +62,14 @@ import org.apache.sshd.sftp.common.SftpException;
 import link.xdavidwu.saf.AbstractUnixLikeDocumentsProvider;
 import link.xdavidwu.saf.PerformsIO;
 import link.xdavidwu.saf.UncheckedAutoCloseable;
+import link.xdavidwu.saf.UriAsDocumentId;
 import link.xdavidwu.saf.metadata.SuppliesMetadataViaProviders;
+import link.xdavidwu.saf.thumbnails.SuppliesThumbnailsViaProviders;
 
+// TODO XDG thumbnails
 public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
-		implements PerformsIO, SuppliesMetadataViaProviders {
+		implements PerformsIO, UriAsDocumentId, SuppliesMetadataViaProviders,
+			SuppliesThumbnailsViaProviders {
 	private static final String TAG = "SFTP";
 	private static final String AUTHORITY = "link.xdavidwu.saf.sftp";
 
@@ -114,8 +120,9 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 	};
 
 	@Override
-	protected String pathFromDocumentId(String documentId) {
-		return params.remotePath() + super.pathFromDocumentId(documentId);
+	public String pathFromDocumentId(String documentId) {
+		return params.remotePath() +
+			UriAsDocumentId.super.pathFromDocumentId(documentId);
 	}
 
 	@Override
@@ -540,6 +547,13 @@ public class SftpDocumentsProvider extends AbstractUnixLikeDocumentsProvider
 	public Bundle getDocumentMetadata(String documentId)
 			throws AuthenticationRequiredException, FileNotFoundException {
 		return getDocumentMetadataViaProviders(documentId);
+	}
+
+	@Override
+	public AssetFileDescriptor openDocumentThumbnail(String documentId,
+			Point sizeHint, CancellationSignal signal)
+			throws AuthenticationRequiredException, FileNotFoundException {
+		return openDocumentThumbnailViaProviders(documentId, sizeHint, signal);
 	}
 
 	@Override
